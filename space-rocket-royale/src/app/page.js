@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { GameEngine, AudioEngine, UPGRADES, RARITY_COLOR, RARITY_GLOW } from '../../game/GameEngine';
+import { GameEngine, AudioEngine, UPGRADES, RARITY_COLOR, RARITY_GLOW } from './game/GameEngine';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STATIC BACKGROUND SYSTEM (Generated once outside component loops to avoid re-renders)
