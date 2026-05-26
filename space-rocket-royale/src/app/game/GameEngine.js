@@ -90,10 +90,10 @@ export class AudioEngine {
 // UPGRADE DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 export const UPGRADES = [
-  { id:'dmg1',     name:'Plasma Boost',      desc:'+25% bullet damage',          icon:'🔥', rarity:'common',   cost:80,   category:'offense', apply: p=>{ p.damageMult+=0.25; } },
-  { id:'dmg2',     name:'Void Core',          desc:'+60% bullet damage',          icon:'💀', rarity:'rare',      cost:200,  category:'offense', apply: p=>{ p.damageMult+=0.60; } },
-  { id:'dmg3',     name:'Galactic Cannon',   desc:'+120% bullet damage',         icon:'⚡', rarity:'epic',      cost:450,  category:'offense', apply: p=>{ p.damageMult+=1.20; } },
-  { id:'pen1',     name:'Piercing Shot',     desc:'Bullets pierce 1 extra enemy',icon:'🏹',rarity:'rare',      cost:250,  category:'offense', apply: p=>{ p.pierce+=1; } },
+  { id:'dmg1',      name:'Plasma Boost',      desc:'+25% bullet damage',          icon:'🔥', rarity:'common',   cost:80,   category:'offense', apply: p=>{ p.damageMult+=0.25; } },
+  { id:'dmg2',      name:'Void Core',          desc:'+60% bullet damage',          icon:'💀', rarity:'rare',      cost:200,  category:'offense', apply: p=>{ p.damageMult+=0.60; } },
+  { id:'dmg3',      name:'Galactic Cannon',   desc:'+120% bullet damage',         icon:'⚡', rarity:'epic',      cost:450,  category:'offense', apply: p=>{ p.damageMult+=1.20; } },
+  { id:'pen1',      name:'Piercing Shot',     desc:'Bullets pierce 1 extra enemy',icon:'🏹',rarity:'rare',      cost:250,  category:'offense', apply: p=>{ p.pierce+=1; } },
   { id:'multi1',   name:'Split Fire',        desc:'Fire 2 extra bullets',        icon:'🔱', rarity:'epic',      cost:380,  category:'offense', apply: p=>{ p.extraBullets+=2; } },
   { id:'crit1',    name:'Targeting Array',   desc:'+20% crit chance',            icon:'🎯', rarity:'uncommon', cost:150,  category:'offense', apply: p=>{ p.critChance+=0.20; } },
   { id:'fr1',      name:'Overcharge',        desc:'+30% fire rate',              icon:'⚡', rarity:'common',   cost:90,   category:'offense', apply: p=>{ p.fireRateMult+=0.30; } },
@@ -103,7 +103,7 @@ export const UPGRADES = [
   { id:'regen1',   name:'Nano-Repair',       desc:'Regen 2 HP/sec',              icon:'💚', rarity:'uncommon', cost:160,  category:'defense', apply: p=>{ p.hpRegen+=2; } },
   { id:'regen2',   name:'Bio-Matrix',        desc:'Regen 6 HP/sec',              icon:'🌿', rarity:'epic',      cost:400,  category:'defense', apply: p=>{ p.hpRegen+=6; } },
   { id:'shield1',  name:'Energy Shield',      desc:'Absorb 30 damage once/10s',  icon:'🔵', rarity:'rare',      cost:280,  category:'defense', apply: p=>{ p.shieldMax+=30; p.shield+=30; } },
-  { id:'iframes1', name:'Phase Drive',       desc:'+0.3s invuln after hit',      icon:'👻', rarity:'uncommon', cost:180,  category:'defense', apply: p=>{ p.iFrameBonus+=0.3; } },
+  { id:'iframes1', name:'Phase Drive',       desc:'+0.3s invuln after hit',      icon:'ghost', rarity:'uncommon', cost:180,  category:'defense', apply: p=>{ p.iFrameBonus+=0.3; } },
   { id:'spd1',     name:'Ion Thrusters',     desc:'+20% movement speed',         icon:'🚀', rarity:'common',   cost:75,   category:'movement',apply: p=>{ p.speedMult+=0.20; } },
   { id:'spd2',     name:'Warp Core',          desc:'+50% movement speed',         icon:'🌠', rarity:'rare',      cost:230,  category:'movement',apply: p=>{ p.speedMult+=0.50; } },
   { id:'dash1',    name:'Quantum Dash',      desc:'Dash distance +50%',          icon:'💨', rarity:'uncommon', cost:140,  category:'movement',apply: p=>{ p.dashDistMult+=0.50; } },
@@ -123,14 +123,14 @@ export const RARITY_COLOR = { common:'#9ca3af', uncommon:'#4ade80', rare:'#60a5f
 export const RARITY_GLOW  = { common:'rgba(156,163,175,0.3)', uncommon:'rgba(74,222,128,0.3)', rare:'rgba(96,165,250,0.3)', epic:'rgba(192,132,252,0.4)', legendary:'rgba(251,191,36,0.5)' };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STATE STATE FACTORY & DATA CONFIGS
+// STATE FACTORY & DATA CONFIGS
 // ═══════════════════════════════════════════════════════════════════════════════
 const createPlayer = (cx, cy) => ({
   pos: {x:cx, y:cy}, vel: V.zero(), angle: -Math.PI/2,
   hp: 100, maxHp: 100, hpRegen: 0, shield: 0, shieldMax: 0, shieldCooldown: 0,
   xp: 0, xpToNext: 100, level: 1, gold: 0, score: 0, kills: 0,
   damageMult: 1.0, fireRateMult: 1.0, speedMult: 1.0, dashDistMult: 1.0,
-  pierce: 0, extraBullets: 0, critChance: 0.05, magnetRadius: 80,
+  text: "", pierce: 0, extraBullets: 0, critChance: 0.05, magnetRadius: 80,
   xpMult: 1.0, goldMult: 1.0, drones: 0, bombDmg: 0, iFrameBonus: 0,
   iFrameTimer: 0, fireCooldown: 0, dashCooldown: 0, bombCooldown: 0, magnetCooldown:0,
   dead: false, invuln: false, radius: 12, trail: [], exhaustTimer: 0,
@@ -149,7 +149,7 @@ const makeDrone = () => ({ pos:{x:0,y:0}, angle:0, orbitAngle:0, shootCooldown:0
 const BOSSES = [
   { name:'Asteroid Titan', color:'#92400e', accent:'#fbbf24', radius:55, hpBase:800, xpDrop:500, goldDrop:300, phases:[ { hpThresh:1.0, attacks:['boulder_throw','orbit_rocks'],  speed:1.2, fireRate:90  }, { hpThresh:0.5, attacks:['boulder_throw','laser_sweep'],  speed:1.8, fireRate:60  }, { hpThresh:0.2, attacks:['rapid_fire','laser_sweep'],     speed:2.2, fireRate:35  } ] },
   { name:'Void Serpent', color:'#4c1d95', accent:'#a855f7', radius:45, hpBase:650, xpDrop:600, goldDrop:350, phases:[ { hpThresh:1.0, attacks:['plasma_breath','teleport'],      speed:2.0, fireRate:75  }, { hpThresh:0.4, attacks:['plasma_breath','homing_burst'], speed:2.8, fireRate:45  } ] },
-  { name:'Galactic Destroyer', color:'#1e3a5f', accent:'#38bdf8', radius:65, hpBase:1200, xpDrop:700, goldDrop:500, phases:[ { hpThresh:1.0, attacks:['satellite_swarm','laser_sweep'], speed:1.0, fireRate:100 }, { hpThresh:0.6, attacks:['rapid_fire','laser_sweep'],       speed:1.5, fireRate:55  }, { hpThresh:0.25,attacks:['rapid_fire','ram_charge'],       speed:2.5, fireRate:30  } ] },
+  { name:'Galactic Destroyer', color:'#1e3a5f', accent:'#38bdf8', radius:65, hpBase:1200, xpDrop:700, goldDrop:500, phases:[ { hpThresh:1.0, attacks:['satellite_swarm','laser_sweep'], speed:1.0, fireRate:100 }, { hpThresh:0.6, attacks:['rapid_fire','laser_sweep'],        speed:1.5, fireRate:55  }, { hpThresh:0.25,attacks:['rapid_fire','ram_charge'],        speed:2.5, fireRate:30  } ] },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -170,6 +170,14 @@ export class GameEngine {
 
     this.keys    = {};
     this.mouse   = {x:0,y:0,down:false,wx:0,wy:0};
+
+    // ─── PHASE 1 PROPERTIES ───────────────────────────────────────────────────
+    this.joystickInput = { x: 0, y: 0 };
+    this.isMobileDevice = false;
+    this.mobilePerformanceMode = false;
+    this.touchAimingActive = false;
+    this.touchAimPos = { x: 0, y: 0 };
+    // ─────────────────────────────────────────────────────────────────────────
 
     this.bullets   = new Pool(makeBullet,  b=>{b.active=false;b.trail=[];b.pierceCount=0;b.homing=false;}, 120);
     this.particles = new Pool(makeParticle,p=>{p.active=false;}, 400);
@@ -255,11 +263,70 @@ export class GameEngine {
     };
     this._onMouseDown = (e) => { if (e.button===0) this.mouse.down = true; };
     this._onMouseUp   = (e) => { if (e.button===0) this.mouse.down = false; };
+    
+    // ─── PHASE 1 TOUCH ENGINE BINDINGS ───────────────────────────────────────
+    this._onTouchStart = (e) => {
+      if (!this.player || !this.isMobileDevice) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const sx = this.canvas.width / rect.width;
+      const sy = this.canvas.height / rect.height;
+      
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.clientX > window.innerWidth / 2) {
+          this.touchAimingActive = true;
+          const mx = (t.clientX - rect.left) * sx;
+          const my = (t.clientY - rect.top) * sy;
+          this.touchAimPos = { x: mx, y: my };
+          this.mouse.down = true;
+          break;
+        }
+      }
+    };
+
+    this._onTouchMove = (e) => {
+      if (!this.player || !this.isMobileDevice || !this.touchAimingActive) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const sx = this.canvas.width / rect.width;
+      const sy = this.canvas.height / rect.height;
+      
+      for (let i = 0; i < e.touches.length; i++) {
+        const t = e.touches[i];
+        if (t.clientX > window.innerWidth / 2) {
+          const mx = (t.clientX - rect.left) * sx;
+          const my = (t.clientY - rect.top) * sy;
+          this.touchAimPos = { x: mx, y: my };
+          break;
+        }
+      }
+    };
+
+    this._onTouchEnd = (e) => {
+      if (!this.isMobileDevice) return;
+      let rightTouchActive = false;
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].clientX > window.innerWidth / 2) {
+          rightTouchActive = true;
+          break;
+        }
+      }
+      if (!rightTouchActive) {
+        this.touchAimingActive = false;
+        this.mouse.down = false;
+      }
+    };
+    // ─────────────────────────────────────────────────────────────────────────
+
     window.addEventListener('keydown',    this._onKey);
     window.addEventListener('keyup',      this._onKey);
     this.canvas.addEventListener('mousemove', this._onMouseMove);
     this.canvas.addEventListener('mousedown', this._onMouseDown);
     this.canvas.addEventListener('mouseup',   this._onMouseUp);
+    
+    this.canvas.addEventListener('touchstart', this._onTouchStart, { passive: true });
+    this.canvas.addEventListener('touchmove', this._onTouchMove, { passive: true });
+    this.canvas.addEventListener('touchend', this._onTouchEnd, { passive: true });
+    this.canvas.addEventListener('touchcancel', this._onTouchEnd, { passive: true });
   }
 
   destroy() {
@@ -270,6 +337,11 @@ export class GameEngine {
     this.canvas.removeEventListener('mousemove', this._onMouseMove);
     this.canvas.removeEventListener('mousedown', this._onMouseDown);
     this.canvas.removeEventListener('mouseup',   this._onMouseUp);
+    
+    this.canvas.removeEventListener('touchstart', this._onTouchStart);
+    this.canvas.removeEventListener('touchmove', this._onTouchMove);
+    this.canvas.removeEventListener('touchend', this._onTouchEnd);
+    this.canvas.removeEventListener('touchcancel', this._onTouchEnd);
   }
 
   startGame(mode='endless') {
@@ -343,19 +415,68 @@ export class GameEngine {
     if (p.hpRegen > 0) p.hp = Math.min(p.maxHp, p.hp + p.hpRegen*dt*0.016667);
 
     const speed = 220 * p.speedMult; const acc = {x:0,y:0};
-    if (this.keys['KeyW']||this.keys['ArrowUp'])    acc.y -= 1;
-    if (this.keys['KeyS']||this.keys['ArrowDown'])  acc.y += 1;
-    if (this.keys['KeyA']||this.keys['ArrowLeft'])  acc.x -= 1;
-    if (this.keys['KeyD']||this.keys['ArrowRight']) acc.x += 1;
+    
+    // ─── MOVEMENT MUTATION ───────────────────────────────────────────────────
+    if (this.isMobileDevice && (this.joystickInput.x !== 0 || this.joystickInput.y !== 0)) {
+      acc.x = this.joystickInput.x;
+      acc.y = this.joystickInput.y;
+    } else {
+      if (this.keys['KeyW']||this.keys['ArrowUp'])  acc.y -= 1;
+      if (this.keys['KeyS']||this.keys['ArrowDown']) acc.y += 1;
+      if (this.keys['KeyA']||this.keys['ArrowLeft']) acc.x -= 1;
+      if (this.keys['KeyD']||this.keys['ArrowRight']) acc.x += 1;
+    }
     const l = V.len(acc);
-    if (l>0) { p.vel = V.lerp(p.vel, V.scale(V.norm(acc), speed), 0.18*dt); } else { p.vel = V.lerp(p.vel, V.zero(), 0.15*dt); }
+    if (l>0) { p.vel = V.lerp(p.vel, V.scale(this.isMobileDevice ? acc : V.norm(acc), speed), 0.18*dt); } else { p.vel = V.lerp(p.vel, V.zero(), 0.15*dt); }
+    // ─────────────────────────────────────────────────────────────────────────
+    
     p.pos = V.add(p.pos, V.scale(p.vel, dt*0.016667));
-    p.angle = Math.atan2(this.mouse.wy - p.pos.y, this.mouse.wx - p.pos.x);
+    
+    // ─── AIMING MUTATION (TOUCH TARGET SCANNING / TRACKING ENGINE) ───────────
+    if (this.isMobileDevice) {
+      let targetedEnemy = null;
+      let shortestDistance = 400;
+      
+      this.enemies.forEach(e => {
+        if (!e.active || e.spawnFlash > 0) return;
+        const d = V.dist(p.pos, e.pos);
+        if (d < shortestDistance) {
+          shortestDistance = d;
+          targetedEnemy = e;
+        }
+      });
+      
+      if (this.boss && this.boss.active) {
+        if (V.dist(p.pos, this.boss.pos) < shortestDistance) {
+          targetedEnemy = this.boss;
+        }
+      }
+      
+      if (this.touchAimingActive) {
+        this.mouse.wx = this.touchAimPos.x - this.W/2 + this.camera.x;
+        this.mouse.wy = this.touchAimPos.y - this.H/2 + this.camera.y;
+        p.angle = Math.atan2(this.mouse.wy - p.pos.y, this.mouse.wx - p.pos.x);
+      } else if (targetedEnemy) {
+        p.angle = Math.atan2(targetedEnemy.pos.y - p.pos.y, targetedEnemy.pos.x - p.pos.x);
+        this.mouse.down = true;
+      } else {
+        this.mouse.down = false;
+        if (V.len(p.vel) > 0.1) {
+          p.angle = Math.atan2(p.vel.y, p.vel.x);
+        }
+      }
+    } else {
+      p.angle = Math.atan2(this.mouse.wy - p.pos.y, this.mouse.wx - p.pos.x);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     this.camera.x = lerp(this.camera.x, p.pos.x, 0.1*dt);
     this.camera.y = lerp(this.camera.y, p.pos.y, 0.1*dt);
-    this.mouse.wx = this.mouse.x - this.W/2 + this.camera.x;
-    this.mouse.wy = this.mouse.y - this.H/2 + this.camera.y;
+    
+    if (!this.isMobileDevice) {
+      this.mouse.wx = this.mouse.x - this.W/2 + this.camera.x;
+      this.mouse.wy = this.mouse.y - this.H/2 + this.camera.y;
+    }
 
     p.trail.push(V.copy(p.pos)); if (p.trail.length > 14) p.trail.shift();
 
@@ -669,11 +790,16 @@ export class GameEngine {
   }
 
   _spawnParticles(pos, color, count, speed, maxLife) {
-    for (let i=0;i<count;i++) {
-      if (this.particles.size > 350) return;
+    // ─── PERFORMANCE THROTTLE ────────────────────────────────────────────────
+    const adjustedCount = this.mobilePerformanceMode ? Math.ceil(count * 0.4) : count;
+    const maxPoolLimit = this.mobilePerformanceMode ? 120 : 350;
+    
+    for (let i=0;i<adjustedCount;i++) {
+      if (this.particles.size > maxPoolLimit) return;
       const pt = this.particles.get(); pt.active=true; pt.color=color; pt.pos={x:pos.x,y:pos.y}; const a=rand(0,TAU);
       pt.vel={x:Math.cos(a)*rand(0.5,speed), y:Math.sin(a)*rand(0.5,speed)}; pt.life=rand(maxLife*0.5,maxLife); pt.maxLife=pt.life; pt.size=rand(1.5,4); pt.alpha=1;
     }
+    // ─────────────────────────────────────────────────────────────────────────
   }
 
   _updatePods(dt) {
@@ -731,7 +857,7 @@ export class GameEngine {
       for (let i=0;i<8;i++) setTimeout(()=>{
         if (!this.player||this.player.dead) return;
         const e=makeEnemy(); Object.assign(e,{pos:{x:this.player.pos.x+rand(-400,400),y:this.player.pos.y-500}, vel:{x:rand(-1,1),y:rand(5,8)},hp:30,maxHp:30,radius:15,type:'kamikaze',color:'#9ca3af',glowColor:'#9ca3af66',speed:0,damage:20,xpDrop:20,goldDrop:12,fireRate:0,shootCooldown:999,active:true,flash:0,spawnFlash:0}); this.enemies.push(e);
-      },i*500);
+      }, i*500);
     } else if (evt === 'gold_rush' && this.player) {
       this.player.goldMult *= 2; setTimeout(()=>{ if(this.player) this.player.goldMult /= 2; }, 60000);
     } else if (evt === 'emp_pulse') {
@@ -761,9 +887,6 @@ export class GameEngine {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════════
-  // RESTORED RENDERING PIPELINE METHODS
-  // ═══════════════════════════════════════════════════════════════════════════════
   _render() {
     this.ctx.clearRect(0,0,this.W,this.H); this.ctx.fillStyle='#030712'; this.ctx.fillRect(0,0,this.W,this.H);
     this.ctx.save(); this.ctx.translate(this.W/2+this.shakeX, this.H/2+this.shakeY); this.ctx.translate(-this.camera.x, -this.camera.y);
@@ -781,6 +904,8 @@ export class GameEngine {
   }
 
   _renderNebulae() {
+    // Skip expensive multi-layered blur radial rendering layers if performance throttling is toggled
+    if (this.mobilePerformanceMode) return;
     const cx = this.camera.x, cy=this.camera.y;
     [{x:-300,y:-200,r:400,c:'rgba(124,58,237,0.06)'},{x:500,y:300,r:350,c:'rgba(6,182,212,0.05)'},{x:-100,y:500,r:500,c:'rgba(239,68,68,0.04)'},{x:800,y:-400,r:300,c:'rgba(52,211,153,0.04)'}].forEach(n=>{
       const gx=n.x-(cx*0.3); const gy=n.y-(cy*0.3); const grad=this.ctx.createRadialGradient(gx,gy,0,gx,gy,n.r);
@@ -792,13 +917,18 @@ export class GameEngine {
     this.stars.forEach(s=>{
       const alpha=s.alpha*(0.7+0.3*Math.sin(this.tick*0.02+s.twinkle)); this.ctx.globalAlpha=alpha; this.ctx.fillStyle='#fff'; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.1),s.y-(this.camera.y*0.1),s.size,0,TAU); this.ctx.fill();
     });
-    this.starsNear.forEach(s=>{ this.ctx.globalAlpha=s.alpha; this.ctx.fillStyle=s.color; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.4),s.y-(this.camera.y*0.4),s.size,0,TAU); this.ctx.fill(); });
+    // Skip optional secondary parallax star layer on performance-restricted mobile frames
+    if (!this.mobilePerformanceMode) {
+      this.starsNear.forEach(s=>{ this.ctx.globalAlpha=s.alpha; this.ctx.fillStyle=s.color; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.4),s.y-(this.camera.y*0.4),s.size,0,TAU); this.ctx.fill(); });
+    }
     this.ctx.globalAlpha=1;
   }
 
   _renderPods() {
     this.pods.forEach(pod=>{
-      if(!pod.active) return; const pulse=0.85+0.15*Math.sin(pod.pulse); this.ctx.save(); this.ctx.translate(pod.pos.x,pod.pos.y); this.ctx.rotate(pod.spin); this.ctx.shadowBlur=15; this.ctx.shadowColor=pod.type==='powerup'?'#fbbf24':'#60a5fa';
+      if(!pod.active) return; const pulse=0.85+0.15*Math.sin(pod.pulse); this.ctx.save(); this.ctx.translate(pod.pos.x,pod.pos.y); this.ctx.rotate(pod.spin); 
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 15; 
+      this.ctx.shadowColor=pod.type==='powerup'?'#fbbf24':'#60a5fa';
       const grad=this.ctx.createRadialGradient(0,0,0,0,0,pod.radius*pulse);
       if (pod.type==='powerup') { grad.addColorStop(0,'#fef9c3'); grad.addColorStop(0.6,'#fbbf24'); grad.addColorStop(1,'#92400e'); } else { grad.addColorStop(0,'#e0f2fe'); grad.addColorStop(0.6,'#60a5fa'); grad.addColorStop(1,'#1e3a5f'); }
       this.ctx.fillStyle=grad; this.ctx.beginPath();
@@ -812,7 +942,9 @@ export class GameEngine {
 
   _renderLoot() {
     this.loot.forEach(l=>{
-      if(!l.active) return; const pulse=0.8+0.2*Math.sin(l.pulse); this.ctx.save(); this.ctx.translate(l.pos.x,l.pos.y); this.ctx.shadowBlur=10; this.ctx.shadowColor=l.color; this.ctx.fillStyle=l.color; this.ctx.globalAlpha=0.9+0.1*pulse; this.ctx.beginPath();
+      if(!l.active) return; const pulse=0.8+0.2*Math.sin(l.pulse); this.ctx.save(); this.ctx.translate(l.pos.x,l.pos.y); 
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 10; 
+      this.ctx.shadowColor=l.color; this.ctx.fillStyle=l.color; this.ctx.globalAlpha=0.9+0.1*pulse; this.ctx.beginPath();
       if(l.type==='gold') { this.ctx.arc(0,0,l.radius*pulse,0,TAU); } else { this.ctx.moveTo(0,-l.radius*pulse); this.ctx.lineTo(l.radius*0.7*pulse,0); this.ctx.lineTo(0,l.radius*pulse); this.ctx.lineTo(-l.radius*0.7*pulse,0); this.ctx.closePath(); }
       this.ctx.fill(); this.ctx.restore();
     });
@@ -833,7 +965,9 @@ export class GameEngine {
     this.bullets.forEach(b=>{
       if(!b.active) return; this.ctx.save();
       if(b.trail.length>1) { this.ctx.globalAlpha=0.35; this.ctx.strokeStyle=b.color; this.ctx.lineWidth=b.radius*0.8; this.ctx.lineCap='round'; this.ctx.beginPath(); this.ctx.moveTo(b.trail[0].x,b.trail[0].y); b.trail.forEach(pt=>this.ctx.lineTo(pt.x,pt.y)); this.ctx.stroke(); }
-      this.ctx.globalAlpha=1; this.ctx.shadowBlur=b.owner==='player'?12:8; this.ctx.shadowColor=b.color; this.ctx.fillStyle=b.color; this.ctx.beginPath(); this.ctx.arc(b.pos.x,b.pos.y,b.radius,0,TAU); this.ctx.fill(); this.ctx.restore();
+      this.ctx.globalAlpha=1; 
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : (b.owner==='player'?12:8); 
+      this.ctx.shadowColor=b.color; this.ctx.fillStyle=b.color; this.ctx.beginPath(); this.ctx.arc(b.pos.x,b.pos.y,b.radius,0,TAU); this.ctx.fill(); this.ctx.restore();
     });
     this.ctx.shadowBlur=0;
   }
@@ -842,7 +976,8 @@ export class GameEngine {
     this.enemies.forEach(e=>{
       if(!e.active) return; this.ctx.save(); this.ctx.translate(e.pos.x,e.pos.y); this.ctx.rotate(e.angle+Math.PI/2);
       if(e.spawnFlash>0) this.ctx.globalAlpha=1-(e.spawnFlash/30);
-      this.ctx.shadowBlur=e.flash>0?20:12; this.ctx.shadowColor=e.flash>0?'#fff':e.glowColor; this.ctx.fillStyle=e.flash>0?'#fff':e.color;
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : (e.flash>0?20:12); 
+      this.ctx.shadowColor=e.flash>0?'#fff':e.glowColor; this.ctx.fillStyle=e.flash>0?'#fff':e.color;
       const r=e.radius;
       if(e.type === 'drone') { this.ctx.beginPath(); this.ctx.moveTo(0,-r); this.ctx.lineTo(-r*0.7,r*0.8); this.ctx.lineTo(0,r*0.4); this.ctx.lineTo(r*0.7,r*0.8); this.ctx.closePath(); this.ctx.fill(); }
       else if(e.type === 'kamikaze') { this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r,r); this.ctx.lineTo(r,r); this.ctx.closePath(); this.ctx.fill(); }
@@ -858,7 +993,8 @@ export class GameEngine {
   _renderBoss() {
     const b=this.boss; if(!b||!b.active) return; this.ctx.save(); this.ctx.translate(b.pos.x,b.pos.y);
     if(b.spawnFlash>0) this.ctx.globalAlpha=1-(b.spawnFlash/60);
-    this.ctx.shadowBlur=b.flash>0?40:25; this.ctx.shadowColor=b.flash>0?'#fff':this.bossData.accent;
+    this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : (b.flash>0?40:25); 
+    this.ctx.shadowColor=b.flash>0?'#fff':this.bossData.accent;
     this.ctx.strokeStyle=this.bossData.accent; this.ctx.lineWidth=3; this.ctx.globalAlpha=(this.ctx.globalAlpha||1)*0.4; this.ctx.beginPath(); this.ctx.arc(0,0,b.radius+12+Math.sin(this.tick*0.05)*5,0,TAU); this.ctx.stroke();
     this.ctx.globalAlpha=b.spawnFlash>0?(1-b.spawnFlash/60):1;
     const grad=this.ctx.createRadialGradient(0,0,0,0,0,b.radius); grad.addColorStop(0,this.bossData.accent+'cc'); grad.addColorStop(0.5,this.bossData.color+'ee'); grad.addColorStop(1,'#00000000'); this.ctx.fillStyle=grad; this.ctx.rotate(b.angle*0.5); this.ctx.beginPath();
@@ -877,16 +1013,21 @@ export class GameEngine {
     this.ctx.save(); this.ctx.translate(p.pos.x,p.pos.y); this.ctx.rotate(p.angle+Math.PI/2);
     if(p.invuln && Math.floor(this.tick/3)%2===0) { this.ctx.restore(); return; }
     if(p.shield>0) { this.ctx.shadowBlur=0; this.ctx.strokeStyle='rgba(96,165,250,0.5)'; this.ctx.lineWidth=2; this.ctx.beginPath(); this.ctx.arc(0,0,p.radius+8+Math.sin(this.tick*0.1)*2,0,TAU); this.ctx.stroke(); }
-    this.ctx.shadowBlur=20; this.ctx.shadowColor='#7c3aed'; const r=p.radius; const grad=this.ctx.createLinearGradient(0,-r,0,r); grad.addColorStop(0,'#c4b5fd'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'#4c1d95'); this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r*0.8,r*0.6); this.ctx.lineTo(-r*0.35,r*0.2); this.ctx.lineTo(0,r*0.5); this.ctx.lineTo(r*0.35,r*0.2); this.ctx.lineTo(r*0.8,r*0.6); this.ctx.closePath(); this.ctx.fill();
-    this.ctx.shadowBlur=8; this.ctx.shadowColor='#38bdf8'; this.ctx.fillStyle='#bae6fd'; this.ctx.beginPath(); this.ctx.arc(0,-r*0.3,r*0.28,0,TAU); this.ctx.fill();
+    this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 20; 
+    this.ctx.shadowColor='#7c3aed'; const r=p.radius; const grad=this.ctx.createLinearGradient(0,-r,0,r); grad.addColorStop(0,'#c4b5fd'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'#4c1d95'); this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r*0.8,r*0.6); this.ctx.lineTo(-r*0.35,r*0.2); this.ctx.lineTo(0,r*0.5); this.ctx.lineTo(r*0.35,r*0.2); this.ctx.lineTo(r*0.8,r*0.6); this.ctx.closePath(); this.ctx.fill();
+    this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 8; 
+    this.ctx.shadowColor='#38bdf8'; this.ctx.fillStyle='#bae6fd'; this.ctx.beginPath(); this.ctx.arc(0,-r*0.3,r*0.28,0,TAU); this.ctx.fill();
     if(V.len(p.vel)>0.3){
-      this.ctx.shadowBlur=12; this.ctx.shadowColor='#fbbf24'; const exGrad=this.ctx.createLinearGradient(0,r*0.4,0,r*1.4); exGrad.addColorStop(0,'#fbbf24aa'); exGrad.addColorStop(1,'transparent'); this.ctx.fillStyle=exGrad; this.ctx.beginPath(); this.ctx.moveTo(-r*0.3,r*0.4); this.ctx.lineTo(r*0.3,r*0.4); this.ctx.lineTo((Math.random()-0.5)*r*0.3,r*(1+Math.random()*0.5)); this.ctx.closePath(); this.ctx.fill();
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 12; 
+      this.ctx.shadowColor='#fbbf24'; const exGrad=this.ctx.createLinearGradient(0,r*0.4,0,r*1.4); exGrad.addColorStop(0,'#fbbf24aa'); exGrad.addColorStop(1,'transparent'); this.ctx.fillStyle=exGrad; this.ctx.beginPath(); this.ctx.moveTo(-r*0.3,r*0.4); this.ctx.lineTo(r*0.3,r*0.4); this.ctx.lineTo((Math.random()-0.5)*r*0.3,r*(1+Math.random()*0.5)); this.ctx.closePath(); this.ctx.fill();
     }
     this.ctx.restore(); this.ctx.shadowBlur=0; this.ctx.globalAlpha=1;
   }
 
   _renderDrones() {
-    this.activeDrones.forEach(d=>{ if(d.active) { this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle); this.ctx.shadowBlur=12; this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9'; this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill(); this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill(); this.ctx.restore(); } });
+    this.activeDrones.forEach(d=>{ if(d.active) { this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle); 
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 12; 
+      this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9'; this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill(); this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill(); this.ctx.restore(); } });
     this.ctx.shadowBlur=0;
   }
 }
