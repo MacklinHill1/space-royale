@@ -118,8 +118,37 @@ export const UPGRADES = [
   { id:'leg3',     name:'Ghost Protocol',    desc:'+80% speed, +0.6s iframes',  icon:'👁', rarity:'legendary',cost:1100, category:'movement',apply: p=>{ p.speedMult+=0.80; p.iFrameBonus+=0.6; } },
 ];
 
-export const RARITY_COLOR = { common:'#9ca3af', uncommon:'#4ade80', rare:'#60a5fa', epic:'#c084fc', legendary:'#fbbf24' };
-export const RARITY_GLOW  = { common:'rgba(156,163,175,0.3)', uncommon:'rgba(74,222,128,0.3)', rare:'rgba(96,165,250,0.3)', epic:'rgba(192,132,252,0.4)', legendary:'rgba(251,191,36,0.5)' };
+export const RARITY_COLOR = { common:'#9ca3af', uncommon:'#4ade80', rare:'#60a5fa', epic:'#c084fc', legendary:'#fbbf24', mythic:'#ff00ff' };
+export const RARITY_GLOW  = { common:'rgba(156,163,175,0.3)', uncommon:'rgba(74,222,128,0.3)', rare:'rgba(96,165,250,0.3)', epic:'rgba(192,132,252,0.4)', legendary:'rgba(251,191,36,0.5)', mythic:'rgba(255,0,255,0.6)' };
+
+export const CHEST_TIERS = {
+  COMMON_CACHE: { name: 'Common Cache', color: '#9ca3af', rewards: { coins: [50, 100], xp: [100, 200], equipChance: 0.3, abilityChance: 0.1 } },
+  RARE_CRATE: { name: 'Rare Crate', color: '#60a5fa', rewards: { coins: [150, 300], xp: [300, 500], equipChance: 0.5, abilityChance: 0.25 } },
+  ELITE_ARSENAL: { name: 'Elite Arsenal', color: '#c084fc', rewards: { coins: [400, 700], xp: [600, 1000], equipChance: 0.7, abilityChance: 0.4 } },
+  MYTHIC_RELIC: { name: 'Mythic Relic Chest', color: '#fbbf24', rewards: { coins: [800, 1500], xp: [1200, 2000], equipChance: 0.85, abilityChance: 0.6 } },
+  COSMIC_VAULT: { name: 'Cosmic Vault Chest', color: '#ff00ff', rewards: { coins: [2000, 4000], xp: [3000, 5000], equipChance: 0.95, abilityChance: 0.8 } },
+};
+
+export const ABILITIES = {
+  UFO_TRACTOR: { id: 'ufo_tractor', name: 'UFO Tractor Beam', type: 'active', rarity: 'legendary', cooldown: 45, desc: 'Summons UFO that abducts enemies and explodes them back down', icon: '🛸' },
+  MICROWAVE: { id: 'microwave', name: 'Microwave Radiation', type: 'active', rarity: 'epic', cooldown: 30, desc: 'Expanding radiation field with chain explosions', icon: '☢️' },
+  TOXIC_TRAIL: { id: 'toxic_trail', name: 'Toxic Exhaust', type: 'passive', rarity: 'rare', cooldown: 0, desc: 'Leave toxic clouds that slow and amplify damage', icon: '☠️' },
+  SOLAR_LANCE: { id: 'solar_lance', name: 'Solar Lance', type: 'active', rarity: 'legendary', cooldown: 35, desc: 'Hold to charge massive beam that melts bosses', icon: '☀️' },
+  SINGULARITY: { id: 'singularity', name: 'Singularity Collapse', type: 'active', rarity: 'mythic', cooldown: 60, desc: 'Black hole that shreds boss HP', icon: '⚫' },
+  ORBITAL_STRIKE: { id: 'orbital_strike', name: 'Orbital Strike', type: 'active', rarity: 'legendary', cooldown: 50, desc: 'Tungsten rod from orbit with massive impact', icon: '🎯' },
+  HOLOGRAM_DECOY: { id: 'hologram_decoy', name: 'Hologram Decoys', type: 'active', rarity: 'epic', cooldown: 40, desc: 'Deploy 2 decoys that enemies target', icon: '👥' },
+  TEMPORAL_ANCHOR: { id: 'temporal_anchor', name: 'Temporal Anchor', type: 'active', rarity: 'mythic', cooldown: 70, desc: 'Rewind position and HP state', icon: '⏮️' },
+  GRAVITY_WELL: { id: 'gravity_well', name: 'Gravity Well', type: 'active', rarity: 'rare', cooldown: 25, desc: 'Pull enemies together for grouping', icon: '🌀' },
+  TIME_DILATION: { id: 'time_dilation', name: 'Time Dilation', type: 'active', rarity: 'epic', cooldown: 35, desc: 'Slow enemies and bullets by 80%', icon: '⏱️' },
+  EMERGENCY_REPAIR: { id: 'emergency_repair', name: 'Emergency Repair', type: 'active', rarity: 'rare', cooldown: 45, desc: 'Restore 30% HP with invuln bubble', icon: '🔧' },
+  CHAIN_LIGHTNING: { id: 'chain_lightning', name: 'Chain Lightning', type: 'active', rarity: 'epic', cooldown: 20, desc: 'Lightning arcs between up to 4 enemies', icon: '⚡' },
+  RAILGUN: { id: 'railgun', name: 'Railgun Override', type: 'weapon', rarity: 'legendary', cooldown: 0, desc: 'Slow fire, infinite pierce beam', icon: '━' },
+  CLUSTER_MISSILES: { id: 'cluster_missiles', name: 'Cluster Missiles', type: 'weapon', rarity: 'epic', cooldown: 0, desc: 'Explosive spheres that split into homing rockets', icon: '🚀' },
+  GUARDIAN_DRONES: { id: 'guardian_drones', name: 'Guardian Drones', type: 'drone', rarity: 'rare', cooldown: 0, desc: 'Intercept enemy bullets', icon: '🛡️' },
+  SCAVENGER_DRONE: { id: 'scavenger_drone', name: 'Scavenger Drone', type: 'drone', rarity: 'uncommon', cooldown: 0, desc: 'Auto-collects XP and gold', icon: '🧲' },
+  BLOOD_PACT: { id: 'blood_pact', name: 'Blood Pact', type: 'passive', rarity: 'mythic', cooldown: 0, desc: '+1 Max HP per 50 kills', icon: '🩸' },
+  OVERCLOCK: { id: 'overclock', name: 'Overclock Module', type: 'passive', rarity: 'legendary', cooldown: 0, desc: '25% cooldown reduction, +1 passive slot', icon: '⚙️' },
+};
 
 const createPlayer = (cx, cy) => ({
   pos: {x:cx, y:cy}, vel: V.zero(), angle: -Math.PI/2,
@@ -130,6 +159,10 @@ const createPlayer = (cx, cy) => ({
   xpMult: 1.0, goldMult: 1.0, drones: 0, bombDmg: 0, iFrameBonus: 0,
   iFrameTimer: 0, fireCooldown: 0, dashCooldown: 0, bombCooldown: 0, magnetCooldown:0,
   dead: false, invuln: false, radius: 12, trail: [], exhaustTimer: 0,
+  equippedAbilities: { active1: null, active2: null, passive1: null, passive2: null, weapon: null, drone: null },
+  abilityCooldowns: {},
+  abilityStates: {},
+  killCount: 0,
 });
 
 const makeEnemy = () => ({
@@ -141,11 +174,13 @@ const makeBullet = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, damage:1, radius:4, co
 const makeParticle = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, color:'#fff', alpha:1, size:2, life:1, maxLife:1, active:false, type:'dot', });
 const makeLoot = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, type:'xp', value:10, radius:6, color:'#38bdf8', active:false, pulse:0, attracted:false, });
 const makeDrone = () => ({ pos:{x:0,y:0}, angle:0, orbitAngle:0, shootCooldown:0, active:false, });
+const makeChest = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, tier:'COMMON_CACHE', radius:20, active:false, pulse:0, spin:0, opened:false, });
+const makeEquipmentDrop = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, item:null, radius:12, active:false, pulse:0, beam:0, attracted:false, });
 
 const BOSSES = [
-  { name:'Asteroid Titan', color:'#92400e', accent:'#fbbf24', radius:55, hpBase:800, xpDrop:500, goldDrop:300, phases:[ { hpThresh:1.0, attacks:['boulder_throw','orbit_rocks'],  speed:1.2, fireRate:90  }, { hpThresh:0.5, attacks:['boulder_throw','laser_sweep'],  speed:1.8, fireRate:60  }, { hpThresh:0.2, attacks:['rapid_fire','laser_sweep'],     speed:2.2, fireRate:35  } ] },
-  { name:'Void Serpent', color:'#4c1d95', accent:'#a855f7', radius:45, hpBase:650, xpDrop:600, goldDrop:350, phases:[ { hpThresh:1.0, attacks:['plasma_breath','teleport'],      speed:2.0, fireRate:75  }, { hpThresh:0.4, attacks:['plasma_breath','homing_burst'], speed:2.8, fireRate:45  } ] },
-  { name:'Galactic Destroyer', color:'#1e3a5f', accent:'#38bdf8', radius:65, hpBase:1200, xpDrop:700, goldDrop:500, phases:[ { hpThresh:1.0, attacks:['satellite_swarm','laser_sweep'], speed:1.0, fireRate:100 }, { hpThresh:0.6, attacks:['rapid_fire','laser_sweep'],        speed:1.5, fireRate:55  }, { hpThresh:0.25,attacks:['rapid_fire','ram_charge'],        speed:2.5, fireRate:30  } ] },
+  { name:'Asteroid Titan', color:'#92400e', accent:'#fbbf24', radius:55, hpBase:800, xpDrop:500, goldDrop:300, chestTier: 'RARE_CRATE', equipRarities: ['common','uncommon','rare'], phases:[ { hpThresh:1.0, attacks:['boulder_throw','orbit_rocks'],  speed:1.2, fireRate:90  }, { hpThresh:0.5, attacks:['boulder_throw','laser_sweep'],  speed:1.8, fireRate:60  }, { hpThresh:0.2, attacks:['rapid_fire','laser_sweep'],     speed:2.2, fireRate:35  } ] },
+  { name:'Void Serpent', color:'#4c1d95', accent:'#a855f7', radius:45, hpBase:650, xpDrop:600, goldDrop:350, chestTier: 'ELITE_ARSENAL', equipRarities: ['uncommon','rare','epic'], phases:[ { hpThresh:1.0, attacks:['plasma_breath','teleport'],      speed:2.0, fireRate:75  }, { hpThresh:0.4, attacks:['plasma_breath','homing_burst'], speed:2.8, fireRate:45  } ] },
+  { name:'Galactic Destroyer', color:'#1e3a5f', accent:'#38bdf8', radius:65, hpBase:1200, xpDrop:700, goldDrop:500, chestTier: 'MYTHIC_RELIC', equipRarities: ['rare','epic','legendary'], phases:[ { hpThresh:1.0, attacks:['satellite_swarm','laser_sweep'], speed:1.0, fireRate:100 }, { hpThresh:0.6, attacks:['rapid_fire','laser_sweep'],        speed:1.5, fireRate:55  }, { hpThresh:0.25,attacks:['rapid_fire','ram_charge'],        speed:2.5, fireRate:30  } ] },
 ];
 
 export class GameEngine {
@@ -177,6 +212,8 @@ export class GameEngine {
     this.particles = new Pool(makeParticle,p=>{p.active=false;}, 400);
     this.loot      = new Pool(makeLoot,    l=>{l.active=false;l.attracted=false;}, 150);
     this.droneParts= new Pool(makeDrone,   d=>{d.active=false;}, 8);
+    this.chests    = new Pool(makeChest,   c=>{c.active=false;c.opened=false;}, 20);
+    this.equipDrops= new Pool(makeEquipmentDrop, e=>{e.active=false;e.attracted=false;}, 30);
 
     this.player       = null;
     this.enemies      = [];
@@ -214,6 +251,11 @@ export class GameEngine {
     this.shopOpen   = false;
     this.gameOver   = false;
     this.paused     = false;
+    
+    this.activeAbilityEffects = [];
+    this.toxicClouds = [];
+    this.temporalAnchor = null;
+    this.scavengerDrone = null;
 
     this._initStars();
     this._initPods();
@@ -238,11 +280,11 @@ export class GameEngine {
       const key = e.code || e.key;
       const down = e.type==='keydown';
       this.keys[key] = down;
-      if (down && key==='KeyE' && !this.gameOver && !this.shopOpen) this._toggleShop();
+      if (down && key==='KeyE' && !this.gameOver) this._toggleShop();
       if (down && key==='KeyQ') this._useBomb();
       if (down && key==='KeyF') this._useMagnet();
       if (down && (key==='Space'||key==='ShiftLeft')) this._dash();
-      if (down && key==='Escape') this._toggleShop();
+      if (down && key==='Escape' && this.shopOpen) this._toggleShop();
     };
     this._onMouseMove = (e) => {
       const rect = this.canvas.getBoundingClientRect();
@@ -386,6 +428,9 @@ export class GameEngine {
     this._updateBoss(dt);
     this._updateBullets(dt);
     this._updateLoot(dt);
+    this._updateChests(dt);
+    this._updateEquipmentDrops(dt);
+    this._updateAbilities(dt);
     this._updateParticles(dt);
     this._updatePods(dt);
     this._updateSpawning(dt);
@@ -569,7 +614,9 @@ export class GameEngine {
 
   _killEnemy(e) {
     if (!e.active || !this.player) return;
-    e.active = false; this.player.kills++;
+    e.active = false;
+    this.player.kills++;
+    this.player.killCount++;
     const xpGain = Math.floor(e.xpDrop * this.player.xpMult);
     const goldGain = Math.floor(e.goldDrop * this.player.goldMult);
     this._spawnLoot(e.pos, xpGain, goldGain);
@@ -677,6 +724,8 @@ export class GameEngine {
     if (!this.boss || !this.bossData) return;
     this.bossesKilledThisRun++;
     this._spawnLoot(this.boss.pos, this.bossData.xpDrop, this.bossData.goldDrop);
+    this._spawnChest(this.boss.pos, this.bossData.chestTier);
+    this._spawnEquipmentDrop(this.boss.pos, this.bossData.equipRarities);
     this._spawnParticles(this.boss.pos, this.bossData.accent, 60, 7, 80); this._spawnParticles(this.boss.pos, '#fff', 30, 5, 50);
     this.shake=20; this.audio.explosion(); this.player.score += this.bossData.xpDrop*5; this._grantXP(this.bossData.xpDrop * this.player.xpMult);
     this.boss.active=false; this.boss=null; this.bossData=null; this.onStateChange({bossName:null});
@@ -758,6 +807,155 @@ export class GameEngine {
     }
     for (let i=0;i<goldOrbs;i++) {
       const l=this.loot.get(); l.active=true; l.type='gold'; l.value=Math.ceil(gold*5/goldOrbs); l.pos={x:pos.x+rand(-20,20),y:pos.y+rand(-20,20)}; l.vel={x:rand(-2,2),y:rand(-2,2)}; l.color='#fbbf24'; l.radius=5; l.attracted=false;
+    }
+  }
+
+  _spawnChest(pos, tierKey) {
+    const chest = this.chests.get();
+    chest.active = true;
+    chest.tier = tierKey;
+    chest.pos = {x: pos.x + rand(-40, 40), y: pos.y + rand(-40, 40)};
+    chest.vel = {x: rand(-1, 1), y: rand(-1, 1)};
+    chest.pulse = 0;
+    chest.spin = 0;
+    chest.opened = false;
+    this._spawnParticles(chest.pos, CHEST_TIERS[tierKey].color, 20, 3, 30);
+  }
+
+  _spawnEquipmentDrop(pos, rarityPool) {
+    const rarity = rarityPool[randInt(0, rarityPool.length - 1)];
+    const drop = this.equipDrops.get();
+    drop.active = true;
+    drop.pos = {x: pos.x + rand(-60, 60), y: pos.y + rand(-60, 60)};
+    drop.vel = {x: rand(-2, 2), y: rand(-2, 2)};
+    drop.item = { name: `${rarity} Equipment`, rarity, stats: {} };
+    drop.pulse = 0;
+    drop.beam = 0;
+    drop.attracted = false;
+    this._spawnParticles(drop.pos, RARITY_COLOR[rarity], 15, 3, 25);
+  }
+
+  _updateChests(dt) {
+    const p = this.player;
+    if (!p) return;
+    this.chests.forEach(c => {
+      if (!c.active || c.opened) return;
+      c.pulse += 0.06 * dt;
+      c.spin += 0.02 * dt;
+      c.vel.x *= 0.95;
+      c.vel.y *= 0.95;
+      c.pos.x += c.vel.x * dt;
+      c.pos.y += c.vel.y * dt;
+      
+      if (V.dist(c.pos, p.pos) < c.radius + p.radius + 10) {
+        this._openChest(c);
+      }
+    });
+  }
+
+  _openChest(chest) {
+    if (chest.opened) return;
+    chest.opened = true;
+    const tier = CHEST_TIERS[chest.tier];
+    const rewards = tier.rewards;
+    
+    const coins = randInt(rewards.coins[0], rewards.coins[1]);
+    const xp = randInt(rewards.xp[0], rewards.xp[1]);
+    
+    this.player.gold += coins;
+    this._grantXP(xp);
+    
+    if (Math.random() < rewards.equipChance) {
+      this._spawnEquipmentDrop(chest.pos, ['common', 'rare', 'epic']);
+    }
+    
+    if (Math.random() < rewards.abilityChance) {
+      const abilityKeys = Object.keys(ABILITIES);
+      const randomAbility = ABILITIES[abilityKeys[randInt(0, abilityKeys.length - 1)]];
+      this.onStateChange({ abilityUnlocked: randomAbility });
+    }
+    
+    this._spawnParticles(chest.pos, tier.color, 40, 5, 50);
+    this.audio.powerup();
+    this.shake = 5;
+    
+    setTimeout(() => {
+      this.chests.release(chest);
+    }, 100);
+  }
+
+  _updateEquipmentDrops(dt) {
+    const p = this.player;
+    if (!p) return;
+    this.equipDrops.forEach(e => {
+      if (!e.active) return;
+      e.pulse += 0.08 * dt;
+      e.beam += 0.1 * dt;
+      
+      if (e.attracted) {
+        const dir = V.norm(V.sub(p.pos, e.pos));
+        e.vel.x = (e.vel.x + dir.x * 5 * dt) * 0.88;
+        e.vel.y = (e.vel.y + dir.y * 5 * dt) * 0.88;
+      } else {
+        e.vel.x *= 0.96;
+        e.vel.y *= 0.96;
+        if (V.dist(e.pos, p.pos) < 80) e.attracted = true;
+      }
+      
+      e.pos.x += e.vel.x * dt;
+      e.pos.y += e.vel.y * dt;
+      
+      if (V.dist(e.pos, p.pos) < e.radius + p.radius + 6) {
+        this.onStateChange({ equipmentPickup: e.item });
+        this._spawnParticles(e.pos, RARITY_COLOR[e.item.rarity], 20, 4, 30);
+        this.audio.powerup();
+        this.equipDrops.release(e);
+      }
+    });
+  }
+
+  _updateAbilities(dt) {
+    const p = this.player;
+    if (!p) return;
+    
+    Object.keys(p.abilityCooldowns).forEach(key => {
+      if (p.abilityCooldowns[key] > 0) {
+        p.abilityCooldowns[key] = Math.max(0, p.abilityCooldowns[key] - dt * 0.016667);
+      }
+    });
+    
+    if (p.equippedAbilities.passive1 === 'toxic_trail' || p.equippedAbilities.passive2 === 'toxic_trail') {
+      if (V.len(p.vel) > 1 && this.tick % 8 === 0) {
+        this.toxicClouds.push({
+          pos: V.copy(p.pos),
+          radius: 40,
+          life: 480,
+          maxLife: 480,
+        });
+      }
+    }
+    
+    this.toxicClouds = this.toxicClouds.filter(cloud => {
+      cloud.life -= dt;
+      return cloud.life > 0;
+    });
+    
+    this.toxicClouds.forEach(cloud => {
+      this.enemies.forEach(e => {
+        if (e.active && V.dist(e.pos, cloud.pos) < cloud.radius + e.radius) {
+          e.speed = Math.min(e.speed, e.speed * 0.5);
+        }
+      });
+    });
+    
+    if (p.equippedAbilities.passive1 === 'blood_pact' || p.equippedAbilities.passive2 === 'blood_pact') {
+      const killMilestone = Math.floor(p.killCount / 50);
+      const expectedMaxHp = 100 + killMilestone;
+      if (p.maxHp < expectedMaxHp) {
+        p.maxHp = expectedMaxHp;
+        p.hp = Math.min(p.hp + 1, p.maxHp);
+        this._spawnParticles(p.pos, '#ef4444', 10, 2, 20);
+      }
     }
   }
 
@@ -870,6 +1068,9 @@ export class GameEngine {
     this._renderStars();
     this._renderPods();
     this._renderLoot();
+    this._renderChests();
+    this._renderEquipmentDrops();
+    this._renderToxicClouds();
     this._renderParticles();
     this._renderBullets();
     this._renderEnemies();
@@ -992,5 +1193,95 @@ export class GameEngine {
   _renderDrones() {
     this.activeDrones.forEach(d=>{ if(d.active) { this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle); this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9'; this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill(); this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill(); this.ctx.restore(); } });
     this.ctx.shadowBlur=0;
+  }
+
+  _renderChests() {
+    this.chests.forEach(c => {
+      if (!c.active || c.opened) return;
+      const tier = CHEST_TIERS[c.tier];
+      const pulse = 0.9 + 0.1 * Math.sin(c.pulse);
+      
+      this.ctx.save();
+      this.ctx.translate(c.pos.x, c.pos.y);
+      this.ctx.rotate(c.spin);
+      
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 20;
+      this.ctx.shadowColor = tier.color;
+      
+      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, c.radius * pulse);
+      grad.addColorStop(0, tier.color + 'ff');
+      grad.addColorStop(0.7, tier.color + 'aa');
+      grad.addColorStop(1, tier.color + '00');
+      
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(-c.radius * pulse, -c.radius * pulse, c.radius * 2 * pulse, c.radius * 2 * pulse);
+      
+      this.ctx.strokeStyle = tier.color;
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(-c.radius * 0.8, -c.radius * 0.8, c.radius * 1.6, c.radius * 1.6);
+      
+      this.ctx.restore();
+    });
+    this.ctx.shadowBlur = 0;
+  }
+
+  _renderEquipmentDrops() {
+    this.equipDrops.forEach(e => {
+      if (!e.active) return;
+      const pulse = 0.85 + 0.15 * Math.sin(e.pulse);
+      const color = RARITY_COLOR[e.item.rarity];
+      
+      this.ctx.save();
+      this.ctx.translate(e.pos.x, e.pos.y);
+      
+      if (!this.mobilePerformanceMode) {
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -200);
+        this.ctx.lineTo(0, -e.radius * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+      }
+      
+      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 15;
+      this.ctx.shadowColor = color;
+      
+      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, e.radius * pulse);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.4, color);
+      grad.addColorStop(1, color + '00');
+      
+      this.ctx.fillStyle = grad;
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, e.radius * pulse, 0, TAU);
+      this.ctx.fill();
+      
+      this.ctx.restore();
+    });
+    this.ctx.shadowBlur = 0;
+  }
+
+  _renderToxicClouds() {
+    if (this.mobilePerformanceMode) return;
+    this.toxicClouds.forEach(cloud => {
+      const alpha = cloud.life / cloud.maxLife;
+      this.ctx.save();
+      this.ctx.globalAlpha = alpha * 0.4;
+      
+      const grad = this.ctx.createRadialGradient(cloud.pos.x, cloud.pos.y, 0, cloud.pos.x, cloud.pos.y, cloud.radius);
+      grad.addColorStop(0, '#a855f7');
+      grad.addColorStop(0.5, '#7c3aed');
+      grad.addColorStop(1, 'transparent');
+      
+      this.ctx.fillStyle = grad;
+      this.ctx.beginPath();
+      this.ctx.arc(cloud.pos.x, cloud.pos.y, cloud.radius, 0, TAU);
+      this.ctx.fill();
+      
+      this.ctx.restore();
+    });
+    this.ctx.globalAlpha = 1;
   }
 }

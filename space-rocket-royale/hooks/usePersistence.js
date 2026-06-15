@@ -22,7 +22,16 @@ const DEFAULT_SAVE = {
     mod1: null,
     mod2: null,
   },
-  gold: 0
+  gold: 0,
+  unlockedAbilities: [],
+  equippedAbilities: {
+    active1: null,
+    active2: null,
+    passive1: null,
+    passive2: null,
+    weapon: null,
+    drone: null,
+  },
 };
 
 function loadRaw() {
