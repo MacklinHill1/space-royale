@@ -1,19 +1,221 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, Suspense } from 'react';
 import { GameEngine, AudioEngine, UPGRADES, RARITY_COLOR, RARITY_GLOW } from './game/GameEngine';
+import InventoryScreen from '../../ui/screens/InventoryScreen';
+import { usePersistence } from '../../hooks/usePersistence';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// STATIC BACKGROUND SYSTEM (Generated once outside component loops to avoid re-renders)
-// ═══════════════════════════════════════════════════════════════════════════════
-const MENU_BACKGROUND_STARS = typeof window !== 'undefined' 
-  ? Array.from({ length: 80 }, () => ({
-      left: Math.random() * 100,
-      top: Math.random() * 100,
-      size: Math.random() * 3 + 1,
-      opacity: Math.random() * 0.8 + 0.2
-    }))
-  : [];
+function HomepageSeoContent() {
+  return (
+    <article
+      id="about-space-rocket-royale"
+      className="bg-[#030712] text-slate-300 px-6 py-16 font-[family-name:var(--font-geist-sans)]"
+    >
+      <div className="mx-auto max-w-3xl space-y-10">
+        <header className="space-y-4">
+          <p className="text-sm uppercase tracking-widest text-violet-400">
+            Free browser space shooter
+          </p>
+          <h2 className="text-2xl font-bold text-slate-100">
+            Survive waves, defeat bosses, and build your ship in Space Rocket Royale
+          </h2>
+          <p className="leading-relaxed text-slate-400">
+            Space Rocket Royale is a free browser-based space shooter with arcade action,
+            roguelite progression, and wave survival gameplay. Pilot your rocket through
+            endless enemy swarms, level up mid-run, spend gold on powerful upgrades, and
+            challenge colossal bosses — no download required.
+          </p>
+        </header>
+
+        <section aria-labelledby="gameplay-modes">
+          <h2 id="gameplay-modes" className="mb-4 text-xl font-semibold text-slate-100">
+            Game modes
+          </h2>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            <li className="rounded-lg border border-violet-500/20 bg-slate-900/50 p-4">
+              <h3 className="font-semibold text-violet-300">Endless Survival</h3>
+              <p className="mt-1 text-sm">Infinite enemy waves with full XP, gold, and upgrade progression.</p>
+            </li>
+            <li className="rounded-lg border border-red-500/20 bg-slate-900/50 p-4">
+              <h3 className="font-semibold text-red-400">Boss Rush</h3>
+              <p className="mt-1 text-sm">Face a new boss every 60 seconds in this intense boss rush mode.</p>
+            </li>
+            <li className="rounded-lg border border-amber-500/20 bg-slate-900/50 p-4">
+              <h3 className="font-semibold text-amber-400">Speed Farm</h3>
+              <p className="mt-1 text-sm">3× XP and gold for fast roguelite farming runs.</p>
+            </li>
+            <li className="rounded-lg border border-slate-500/20 bg-slate-900/50 p-4">
+              <h3 className="font-semibold text-slate-300">Hardcore &amp; Time Attack</h3>
+              <p className="mt-1 text-sm">60 HP hardcore survival or a 10-minute score sprint.</p>
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="boss-fights">
+          <h2 id="boss-fights" className="mb-4 text-xl font-semibold text-slate-100">
+            Epic boss fights
+          </h2>
+          <p className="mb-4 text-slate-400">
+            Survive long enough and massive bosses enter the arena with multi-phase attack patterns.
+          </p>
+          <ul className="space-y-3">
+            <li>
+              <h3 className="font-semibold text-amber-400">Asteroid Titan</h3>
+              <p className="text-sm">Boulder throws, orbiting rocks, and sweeping lasers across three phases.</p>
+            </li>
+            <li>
+              <h3 className="font-semibold text-purple-400">Void Serpent</h3>
+              <p className="text-sm">Plasma breath, teleport strikes, and homing projectile bursts.</p>
+            </li>
+            <li>
+              <h3 className="font-semibold text-sky-400">Galactic Destroyer</h3>
+              <p className="text-sm">Satellite swarms, rapid fire, laser sweeps, and ram charges.</p>
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="progression-upgrades">
+          <h2 id="progression-upgrades" className="mb-4 text-xl font-semibold text-slate-100">
+            Roguelite upgrades &amp; progression
+          </h2>
+          <p className="leading-relaxed text-slate-400">
+            Earn XP to level up, collect gold between waves, and open the in-run upgrade shop for
+            damage boosts, piercing shots, shields, drones, bombs, and legendary build-defining items.
+            Persistent gear from the Gear Hangar carries bonuses into every run — classic roguelite
+            meta-progression in a fast arcade space shooter.
+          </p>
+        </section>
+
+        <section aria-labelledby="abilities-controls">
+          <h2 id="abilities-controls" className="mb-4 text-xl font-semibold text-slate-100">
+            Abilities &amp; spaceship combat
+          </h2>
+          <p className="leading-relaxed text-slate-400">
+            Dodge with Quantum Dash, clear crowds with Void Bomb, and vacuum loot with the Gravity
+            Magnet. Top-down spaceship combat with auto-aim, combat drones, crit builds, and reactive
+            dodging — built for browser play with keyboard and mouse.
+          </p>
+        </section>
+
+        <section aria-labelledby="faq">
+          <h2 id="faq" className="mb-4 text-xl font-semibold text-slate-100">
+            Frequently asked questions
+          </h2>
+          <dl className="space-y-4">
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+              <dt className="font-semibold text-slate-200">Is Space Rocket Royale free to play?</dt>
+              <dd className="mt-2 text-sm text-slate-400">
+                Yes — completely free in your browser. No download, install, or account needed.
+              </dd>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+              <dt className="font-semibold text-slate-200">How do I control the ship?</dt>
+              <dd className="mt-2 text-sm text-slate-400">
+                Move with WASD or arrow keys, aim with the mouse, and click to shoot. Use Shift to dash,
+                Q for bomb, F for magnet, and E to open the upgrade shop mid-run.
+              </dd>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+              <dt className="font-semibold text-slate-200">What is Boss Rush mode?</dt>
+              <dd className="mt-2 text-sm text-slate-400">
+                Boss Rush spawns a new epic boss every 60 seconds. Perfect for players who want
+                non-stop boss fights and fast arcade action.
+              </dd>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+              <dt className="font-semibold text-slate-200">Does progress save?</dt>
+              <dd className="mt-2 text-sm text-slate-400">
+                Best scores and Gear Hangar equipment persist between sessions in your browser.
+                Each run is a fresh roguelite challenge with new upgrade choices.
+              </dd>
+            </div>
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+              <dt className="font-semibold text-slate-200">Can I play on mobile?</dt>
+              <dd className="mt-2 text-sm text-slate-400">
+                Yes. Touch controls work on mobile browsers, and you can add the game to your home
+                screen for one-tap access.
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <footer className="border-t border-slate-800 pt-8 text-sm text-slate-500">
+          <p>
+            Play Space Rocket Royale — a free indie browser game combining wave survival,
+            boss rush action, and roguelite upgrade builds. Works in modern browsers with no install.
+          </p>
+        </footer>
+      </div>
+    </article>
+  );
+}
+
+const SHARE_TEXT =
+  "Play Space Rocket Royale — a free browser space shooter with boss fights, wave survival, and roguelite upgrades!";
+
+function ShareButton() {
+  const [status, setStatus] = useState(null);
+
+  const copyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setStatus("copied");
+    } catch {
+      setStatus("error");
+    }
+    setTimeout(() => setStatus(null), 2500);
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    const shareData = {
+      title: "Space Rocket Royale",
+      text: SHARE_TEXT,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setStatus("shared");
+        setTimeout(() => setStatus(null), 2500);
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+    copyLink();
+  }, [copyLink]);
+
+  const label =
+    status === "copied" ? "LINK COPIED!" :
+    status === "shared" ? "SHARED!" :
+    status === "error" ? "COPY FAILED" :
+    "SHARE GAME";
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      aria-label="Share Space Rocket Royale with friends"
+      style={{
+        background: status ? "rgba(34, 197, 94, 0.2)" : "rgba(56, 189, 248, 0.15)",
+        border: `2px solid ${status ? "#22c55e" : "#38bdf8"}`,
+        borderRadius: "12px",
+        padding: "14px 28px",
+        cursor: "pointer",
+        color: status ? "#4ade80" : "#7dd3fc",
+        fontWeight: "bold",
+        letterSpacing: "0.05em",
+        fontFamily: '"Courier New", monospace',
+        fontSize: "1rem",
+        boxShadow: status ? "0 0 15px rgba(34,197,94,0.3)" : "0 0 15px rgba(56,189,248,0.25)",
+        transition: "all 0.2s",
+      }}
+    >
+      {status === "copied" || status === "shared" ? "✓ " : "🔗 "}{label}
+    </button>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UI COMPONENT SUB-MODULES
@@ -132,7 +334,7 @@ function HUD({ state, engine }) {
   );
 }
 
-function MainMenu({ onStart, bestScore, stars }) {
+function MainMenu({ onStart, bestScore }) {
   const modes = [
     { id:'endless', label:'ENDLESS SURVIVAL', desc:'Infinite waves, full progression', icon:'🌌', color:'#7c3aed' },
     { id:'boss',    label:'BOSS RUSH',          desc:'Bosses every 60 seconds',          icon:'💀', color:'#dc2626' },
@@ -140,14 +342,37 @@ function MainMenu({ onStart, bestScore, stars }) {
     { id:'hardcore',label:'HARDCORE!',           desc:'60 HP, no second chances',        icon:'☠', color:'#374151' },
     { id:'time',    label:'TIME ATTACK',         desc:'10-minute sprint, max score',     icon:'⏱', color:'#0369a1' },
   ];
+
   return (
     <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 40%,#0f0728 0%,#030712 70%)',fontFamily:'"Courier New",monospace',padding:'20px' }}>
-      {stars.map((s, i) => <div key={i} style={{ position: 'absolute', left: `${s.left}%`, top: `${s.top}%`, width: `${s.size}px`, height: `${s.size}px`, borderRadius: '50%', background: 'white', opacity: s.opacity }} />)}
-      <div style={{textAlign:'center',marginBottom:'32px'}}>
-        <div style={{fontSize:'clamp(2rem,5vw,3.5rem)',fontWeight:'900',letterSpacing:'0.05em',background:'linear-gradient(135deg,#c4b5fd,#38bdf8)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>SPACE ROCKET ROYALE</div>
-        {bestScore>0 && <div style={{marginTop:'8px',color:'#fbbf24',fontSize:'0.85rem'}}>🏆 Best Score: {bestScore.toLocaleString()}</div>}
+      
+      {/* ─── PURE CSS STAR OVERLAY: ZERO JAVASCRIPT STATE, ZERO LOOPS ─── */}
+      <div style={{ 
+        position: 'absolute', 
+        inset: 0, 
+        opacity: 0.2, 
+        backgroundImage: 'radial-gradient(white 1px, transparent 0), radial-gradient(white 1.5px, transparent 0)', 
+        backgroundSize: '32px 32px, 64px 64px', 
+        backgroundPosition: '0 0, 16px 16px', 
+        pointerEvents: 'none' 
+      }} />
+      
+      <div style={{textAlign:'center',marginBottom:'24px', zIndex: 2}}>
+        <h1 style={{fontSize:'clamp(2rem,5vw,3.5rem)',fontWeight:'900',letterSpacing:'0.05em',background:'linear-gradient(135deg,#c4b5fd,#38bdf8)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',margin:0}}>SPACE ROCKET ROYALE</h1>
+        {bestScore > 0 && <div style={{marginTop:'8px',color:'#fbbf24',fontSize:'0.85rem'}}>🏆 Best Score: {bestScore.toLocaleString()}</div>}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'12px',maxWidth:'700px',width:'100%',marginBottom:'24px'}}>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px', marginBottom: '32px', zIndex: 2 }}>
+        <button 
+          onClick={() => onStart('inventory_view')} 
+          style={{ background: 'rgba(139, 92, 246, 0.25)', border: '2px solid #7c3aed', borderRadius: '12px', padding: '14px 28px', cursor: 'pointer', color: '#c4b5fd', fontWeight: 'bold', letterSpacing: '0.05em', fontFamily: '"Courier New", monospace', transition: 'all 0.2s', fontSize: '1rem', boxShadow: '0 0 15px rgba(124,58,237,0.3)' }}
+        >
+          ⚙️ OPEN GEAR HANGAR
+        </button>
+        <ShareButton />
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'12px',maxWidth:'700px',width:'100%',marginBottom:'24px', zIndex: 2}}>
         {modes.map(m => (
           <button key={m.id} onClick={() => onStart(m.id)} style={{ background:`rgba(15,23,42,0.85)`,border:`1px solid ${m.color}66`,borderRadius:'12px',padding:'16px',cursor:'pointer',textAlign:'left' }}>
             <div style={{fontSize:'1.5rem',marginBottom:'6px'}}>{m.icon}</div>
@@ -169,7 +394,7 @@ function GameOverScreen({ state, onRestart, onMenu }) {
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'28px'}}>
           {[['SCORE',finalScore?.toLocaleString()],['KILLS',finalKills],['LEVEL',finalLevel],['WAVE',finalWave]].map(([label,val]) => (
             <div key={label} style={{ background:'rgba(0,0,0,0.4)',border:'1px solid rgba(55,65,81,0.5)',borderRadius:'10px',padding:'12px' }}>
-              <div style={{color:'#6b7280',fontSize:'0.65rem'}}>{label}</div>
+              <div style={{color:'#6b7280',fontSize:'0.65rem',letterSpacing:'0.05em'}}>{label}</div>
               <div style={{color:'#e2e8f0',fontSize:'1.3rem',fontWeight:'700'}}>{val}</div>
             </div>
           ))}
@@ -186,9 +411,6 @@ function GameOverScreen({ state, onRestart, onMenu }) {
 function LevelUpFlash({ level }) { return <div style={{ position:'absolute',top:'30%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:40,color:'#fbbf24',fontWeight:'700',fontFamily:'"Courier New",monospace' }}>⭐ LEVEL UP! (Lvl {level}) ⭐</div>; }
 function BossAlert({ name }) { return <div style={{ position:'absolute',top:'20%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:45,color:'#ef4444',fontWeight:'900',fontFamily:'"Courier New",monospace' }}>⚠ BOSS APPROACHING: {name?.toUpperCase()} ⚠</div>; }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// MAIN APPLICATION ROOT
-// ═══════════════════════════════════════════════════════════════════════════════
 export default function SpaceRocketRoyale() {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
@@ -196,9 +418,11 @@ export default function SpaceRocketRoyale() {
   
   const [screen, setScreen] = useState('menu');
   const [gameState, setGameState] = useState({});
-  const [bestScore, setBestScore] = useState(() => (typeof window !== 'undefined' ? parseInt(localStorage.getItem('srr_best') || '0') : 0));
   const [gameMode, setGameMode] = useState('endless');
   const [engine, setEngine] = useState(null);
+
+  const { save, getBestScore, recordRunResult, forceManualSync } = usePersistence();
+  const bestScore = getBestScore(gameMode);
 
   const containerRef = useRef(null);
   useEffect(() => {
@@ -217,14 +441,20 @@ export default function SpaceRocketRoyale() {
   const handleStateChange = useCallback((update) => {
     setGameState(prev => {
       const next = { ...prev, ...update };
-      if (update.gameOver && update.finalScore > bestScore) { 
-        setBestScore(update.finalScore); 
-        localStorage.setItem('srr_best', update.finalScore.toString()); 
+      if (update.gameOver) { 
+        recordRunResult({
+          mode: gameMode,
+          score: update.finalScore,
+          kills: update.finalKills,
+          level: update.finalLevel,
+          wave: update.finalWave,
+          sessionTime: update.finalTime
+        });
       }
       return next;
     });
     if (update.gameOver) setScreen('gameover');
-  }, [bestScore]);
+  }, [gameMode, recordRunResult]);
 
   const startGame = useCallback((mode) => {
     setGameMode(mode); 
@@ -232,30 +462,65 @@ export default function SpaceRocketRoyale() {
     setTimeout(() => {
       if (!canvasRef.current) return;
       const eng = new GameEngine(canvasRef.current, handleStateChange, audioRef.current);
+      eng.equipmentBonuses = save?.equippedItems || null;
       engineRef.current = eng; 
       setEngine(eng); 
       eng.startGame(mode);
     }, 50);
-  }, [handleStateChange]);
+  }, [handleStateChange, save?.equippedItems]);
 
   const restartGame = useCallback(() => startGame(gameMode), [gameMode, startGame]);
   const goMenu = useCallback(() => { if (engineRef.current) { engineRef.current.destroy(); engineRef.current = null; } setScreen('menu'); setGameState({}); }, []);
 
+  const handleProfileUpdate = useCallback((updatedSave) => {
+    localStorage.setItem('srr_save', JSON.stringify(updatedSave));
+    forceManualSync(updatedSave);
+  }, [forceManualSync]);
+
   useEffect(() => () => { if (engineRef.current) engineRef.current.destroy(); }, []);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden', background: '#030712', cursor: screen === 'game' ? 'crosshair' : 'default' }}>
-      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
-      {screen === 'menu' && <MainMenu onStart={startGame} bestScore={bestScore} stars={MENU_BACKGROUND_STARS} />}
-      {screen === 'game' && (
-        <>
-          <HUD state={gameState} engine={engine} />
-          {gameState.shopOpen && engine && <ShopModal engine={engine} gold={gameState.gold || 0} purchasedItems={gameState.purchasedItems || []} />}
-          {gameState.levelUp && <LevelUpFlash level={gameState.level} />}
-          {gameState.bossAlert && gameState.bossName && <BossAlert name={gameState.bossName} />}
-        </>
-      )}
-      {screen === 'gameover' && <GameOverScreen state={gameState} onRestart={restartGame} onMenu={goMenu} />}
-    </div>
+    <>
+      <main aria-label="Space Rocket Royale game">
+        <div ref={containerRef} style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden', background: '#030712', cursor: screen === 'game' ? 'crosshair' : 'default' }}>
+          <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+
+          <Suspense fallback={null}>
+            {screen === 'menu' && (
+              <MainMenu
+                onStart={(mode) => {
+                  if (mode === 'inventory_view') {
+                    setScreen('inventory');
+                  } else {
+                    startGame(mode);
+                  }
+                }}
+                bestScore={bestScore}
+              />
+            )}
+
+            {screen === 'inventory' && (
+              <InventoryScreen
+                profile={save}
+                onProfileUpdate={handleProfileUpdate}
+                onBack={goMenu}
+              />
+            )}
+
+            {screen === 'game' && (
+              <>
+                <HUD state={gameState} engine={engine} />
+                {gameState.shopOpen && engine && <ShopModal engine={engine} gold={gameState.gold || 0} purchasedItems={gameState.purchasedItems || []} />}
+                {gameState.levelUp && <LevelUpFlash level={gameState.level} />}
+                {gameState.bossAlert && gameState.bossName && <BossAlert name={gameState.bossName} />}
+              </>
+            )}
+
+            {screen === 'gameover' && <GameOverScreen state={gameState} onRestart={restartGame} onMenu={goMenu} />}
+          </Suspense>
+        </div>
+      </main>
+      <HomepageSeoContent />
+    </>
   );
 }

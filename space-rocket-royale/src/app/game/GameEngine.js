@@ -1,4 +1,6 @@
-// game/GameEngine.js
+// src/app/game/GameEngine.js
+
+import { applyEquipmentToPlayer } from '../../../systems/EquipmentSystem.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MATH UTILITIES
@@ -86,34 +88,31 @@ export class AudioEngine {
   damage()    { this._init(); this._tone(150,'square',0.1,0.3); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// UPGRADE DEFINITIONS
-// ═══════════════════════════════════════════════════════════════════════════════
 export const UPGRADES = [
-  { id:'dmg1',      name:'Plasma Boost',      desc:'+25% bullet damage',          icon:'🔥', rarity:'common',   cost:80,   category:'offense', apply: p=>{ p.damageMult+=0.25; } },
-  { id:'dmg2',      name:'Void Core',          desc:'+60% bullet damage',          icon:'💀', rarity:'rare',      cost:200,  category:'offense', apply: p=>{ p.damageMult+=0.60; } },
-  { id:'dmg3',      name:'Galactic Cannon',   desc:'+120% bullet damage',         icon:'⚡', rarity:'epic',      cost:450,  category:'offense', apply: p=>{ p.damageMult+=1.20; } },
-  { id:'pen1',      name:'Piercing Shot',     desc:'Bullets pierce 1 extra enemy',icon:'🏹',rarity:'rare',      cost:250,  category:'offense', apply: p=>{ p.pierce+=1; } },
-  { id:'multi1',   name:'Split Fire',        desc:'Fire 2 extra bullets',        icon:'🔱', rarity:'epic',      cost:380,  category:'offense', apply: p=>{ p.extraBullets+=2; } },
-  { id:'crit1',    name:'Targeting Array',   desc:'+20% crit chance',            icon:'🎯', rarity:'uncommon', cost:150,  category:'offense', apply: p=>{ p.critChance+=0.20; } },
+  { id:'dmg1',     name:'Plasma Boost',      desc:'+25% bullet damage',          icon:'🔥', rarity:'common',   cost:80,   category:'offense', apply: p=>{ p.damageMult+=0.25; } },
+  { id:'dmg2',     name:'Void Core',          desc:'+60% bullet damage',          icon:'💀', rarity:'rare',      cost:200,   category:'offense', apply: p=>{ p.damageMult+=0.60; } },
+  { id:'dmg3',     name:'Galactic Cannon',   desc:'+120% bullet damage',         icon:'⚡', rarity:'epic',      cost:450,   category:'offense', apply: p=>{ p.damageMult+=1.20; } },
+  { id:'pen1',     name:'Piercing Shot',     desc:'Bullets pierce 1 extra enemy',icon:'🏹',rarity:'rare',      cost:250,   category:'offense', apply: p=>{ p.pierce+=1; } },
+  { id:'multi1',   name:'Split Fire',        desc:'Fire 2 extra bullets',        icon:'🔱', rarity:'epic',      cost:380,   category:'offense', apply: p=>{ p.extraBullets+=2; } },
+  { id:'crit1',    name:'Targeting Array',   desc:'+20% crit chance',            icon:'🎯', rarity:'uncommon', cost:150,   category:'offense', apply: p=>{ p.critChance+=0.20; } },
   { id:'fr1',      name:'Overcharge',        desc:'+30% fire rate',              icon:'⚡', rarity:'common',   cost:90,   category:'offense', apply: p=>{ p.fireRateMult+=0.30; } },
-  { id:'fr2',      name:'Rapid Pulse',       desc:'+70% fire rate',              icon:'🌀', rarity:'rare',      cost:220,  category:'offense', apply: p=>{ p.fireRateMult+=0.70; } },
+  { id:'fr2',      name:'Rapid Pulse',       desc:'+70% fire rate',              icon:'🌀', rarity:'rare',      cost:220,   category:'offense', apply: p=>{ p.fireRateMult+=0.70; } },
   { id:'hp1',      name:'Hull Plating',      desc:'+40 max HP',                  icon:'🛡', rarity:'common',   cost:70,   category:'defense', apply: p=>{ p.maxHp+=40; p.hp+=40; } },
-  { id:'hp2',      name:'Void Armor',        desc:'+100 max HP',                 icon:'⚙', rarity:'rare',      cost:210,  category:'defense', apply: p=>{ p.maxHp+=100; p.hp+=100; } },
-  { id:'regen1',   name:'Nano-Repair',       desc:'Regen 2 HP/sec',              icon:'💚', rarity:'uncommon', cost:160,  category:'defense', apply: p=>{ p.hpRegen+=2; } },
-  { id:'regen2',   name:'Bio-Matrix',        desc:'Regen 6 HP/sec',              icon:'🌿', rarity:'epic',      cost:400,  category:'defense', apply: p=>{ p.hpRegen+=6; } },
-  { id:'shield1',  name:'Energy Shield',      desc:'Absorb 30 damage once/10s',  icon:'🔵', rarity:'rare',      cost:280,  category:'defense', apply: p=>{ p.shieldMax+=30; p.shield+=30; } },
-  { id:'iframes1', name:'Phase Drive',       desc:'+0.3s invuln after hit',      icon:'ghost', rarity:'uncommon', cost:180,  category:'defense', apply: p=>{ p.iFrameBonus+=0.3; } },
+  { id:'hp2',      name:'Void Armor',        desc:'+100 max HP',                 icon:'⚙', rarity:'rare',      cost:210,   category:'defense', apply: p=>{ p.maxHp+=100; p.hp+=100; } },
+  { id:'regen1',   name:'Nano-Repair',       desc:'Regen 2 HP/sec',              icon:'💚', rarity:'uncommon', cost:160,   category:'defense', apply: p=>{ p.hpRegen+=2; } },
+  { id:'regen2',   name:'Bio-Matrix',        desc:'Regen 6 HP/sec',              icon:'🌿', rarity:'epic',      cost:400,   category:'defense', apply: p=>{ p.hpRegen+=6; } },
+  { id:'shield1',  name:'Energy Shield',      desc:'Absorb 30 damage once/10s',  icon:'🔵', rarity:'rare',      cost:280,   category:'defense', apply: p=>{ p.shieldMax+=30; p.shield+=30; } },
+  { id:'iframes1', name:'Phase Drive',       desc:'+0.3s invuln after hit',      icon:'👻', rarity:'uncommon', cost:180,   category:'defense', apply: p=>{ p.iFrameBonus+=0.3; } },
   { id:'spd1',     name:'Ion Thrusters',     desc:'+20% movement speed',         icon:'🚀', rarity:'common',   cost:75,   category:'movement',apply: p=>{ p.speedMult+=0.20; } },
-  { id:'spd2',     name:'Warp Core',          desc:'+50% movement speed',         icon:'🌠', rarity:'rare',      cost:230,  category:'movement',apply: p=>{ p.speedMult+=0.50; } },
-  { id:'dash1',    name:'Quantum Dash',      desc:'Dash distance +50%',          icon:'💨', rarity:'uncommon', cost:140,  category:'movement',apply: p=>{ p.dashDistMult+=0.50; } },
-  { id:'mag1',     name:'Gravity Magnet',    desc:'Pull XP/gold from 150px',    icon:'🧲', rarity:'uncommon', cost:130,  category:'utility', apply: p=>{ p.magnetRadius+=150; } },
-  { id:'mag2',     name:'Singularity Core',  desc:'Pull XP/gold from 350px',    icon:'🌑', rarity:'epic',      cost:370,  category:'utility', apply: p=>{ p.magnetRadius+=350; } },
-  { id:'xpm1',     name:'XP Amplifier',      desc:'+50% XP gain',               icon:'⭐', rarity:'uncommon', cost:120,  category:'utility', apply: p=>{ p.xpMult+=0.50; } },
-  { id:'gold1',    name:'Gold Plating',      desc:'+40% gold gain',              icon:'🪙', rarity:'uncommon', cost:110,  category:'utility', apply: p=>{ p.goldMult+=0.40; } },
-  { id:'drone1',   name:'Combat Drone',      desc:'Summon auto-targeting drone', icon:'🤖',rarity:'epic',      cost:420,  category:'utility', apply: p=>{ p.drones+=1; } },
-  { id:'drone2',   name:'Drone Squadron',    desc:'Summon 2 more drones',       icon:'👾', rarity:'legendary',cost:800,  category:'utility', apply: p=>{ p.drones+=2; } },
-  { id:'bomb1',    name:'Void Bomb',          desc:'Bomb ability: AoE 200dmg',   icon:'💣', rarity:'rare',      cost:300,  category:'utility', apply: p=>{ p.bombDmg+=200; } },
+  { id:'spd2',     name:'Warp Core',          desc:'+50% movement speed',         icon:'🌠', rarity:'rare',      cost:230,   category:'movement',apply: p=>{ p.speedMult+=0.50; } },
+  { id:'dash1',    name:'Quantum Dash',      desc:'Dash distance +50%',          icon:'💨', rarity:'uncommon', cost:140,   category:'movement',apply: p=>{ p.dashDistMult+=0.50; } },
+  { id:'mag1',     name:'Gravity Magnet',    desc:'Pull XP/gold from 150px',    icon:'🧲', rarity:'uncommon', cost:130,   category:'utility', apply: p=>{ p.magnetRadius+=150; } },
+  { id:'mag2',     name:'Singularity Core',  desc:'Pull XP/gold from 350px',    icon:'🌑', rarity:'epic',      cost:370,   category:'utility', apply: p=>{ p.magnetRadius+=350; } },
+  { id:'xpm1',     name:'XP Amplifier',      desc:'+50% XP gain',               icon:'⭐', rarity:'uncommon', cost:120,   category:'utility', apply: p=>{ p.xpMult+=0.50; } },
+  { id:'gold1',    name:'Gold Plating',      desc:'+40% gold gain',              icon:'🪙', rarity:'uncommon', cost:110,   category:'utility', apply: p=>{ p.goldMult+=0.40; } },
+  { id:'drone1',   name:'Combat Drone',      desc:'Summon auto-targeting drone', icon:'🤖',rarity:'epic',      cost:420,   category:'utility', apply: p=>{ p.drones+=1; } },
+  { id:'drone2',   name:'Drone Squadron',    desc:'Summon 2 more drones',        icon:'👾', rarity:'legendary',cost:800,   category:'utility', apply: p=>{ p.drones+=2; } },
+  { id:'bomb1',    name:'Void Bomb',          desc:'Bomb ability: AoE 200dmg',   icon:'💣', rarity:'rare',      cost:300,   category:'utility', apply: p=>{ p.bombDmg+=200; } },
   { id:'leg1',     name:'Cosmic Slayer',      desc:'+100% dmg, +50% fire rate',  icon:'🌌', rarity:'legendary',cost:1200, category:'offense', apply: p=>{ p.damageMult+=1.0; p.fireRateMult+=0.50; } },
   { id:'leg2',     name:'Immortal Core',      desc:'+200 HP, regen 10/s, shield 60',icon:'♾',rarity:'legendary',cost:1400,category:'defense', apply: p=>{ p.maxHp+=200;p.hp+=200;p.hpRegen+=10;p.shieldMax+=60;p.shield+=60; } },
   { id:'leg3',     name:'Ghost Protocol',    desc:'+80% speed, +0.6s iframes',  icon:'👁', rarity:'legendary',cost:1100, category:'movement',apply: p=>{ p.speedMult+=0.80; p.iFrameBonus+=0.6; } },
@@ -122,15 +121,12 @@ export const UPGRADES = [
 export const RARITY_COLOR = { common:'#9ca3af', uncommon:'#4ade80', rare:'#60a5fa', epic:'#c084fc', legendary:'#fbbf24' };
 export const RARITY_GLOW  = { common:'rgba(156,163,175,0.3)', uncommon:'rgba(74,222,128,0.3)', rare:'rgba(96,165,250,0.3)', epic:'rgba(192,132,252,0.4)', legendary:'rgba(251,191,36,0.5)' };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// STATE FACTORY & DATA CONFIGS
-// ═══════════════════════════════════════════════════════════════════════════════
 const createPlayer = (cx, cy) => ({
   pos: {x:cx, y:cy}, vel: V.zero(), angle: -Math.PI/2,
   hp: 100, maxHp: 100, hpRegen: 0, shield: 0, shieldMax: 0, shieldCooldown: 0,
   xp: 0, xpToNext: 100, level: 1, gold: 0, score: 0, kills: 0,
   damageMult: 1.0, fireRateMult: 1.0, speedMult: 1.0, dashDistMult: 1.0,
-  text: "", pierce: 0, extraBullets: 0, critChance: 0.05, magnetRadius: 80,
+  pierce: 0, extraBullets: 0, critChance: 0.05, magnetRadius: 80,
   xpMult: 1.0, goldMult: 1.0, drones: 0, bombDmg: 0, iFrameBonus: 0,
   iFrameTimer: 0, fireCooldown: 0, dashCooldown: 0, bombCooldown: 0, magnetCooldown:0,
   dead: false, invuln: false, radius: 12, trail: [], exhaustTimer: 0,
@@ -152,9 +148,6 @@ const BOSSES = [
   { name:'Galactic Destroyer', color:'#1e3a5f', accent:'#38bdf8', radius:65, hpBase:1200, xpDrop:700, goldDrop:500, phases:[ { hpThresh:1.0, attacks:['satellite_swarm','laser_sweep'], speed:1.0, fireRate:100 }, { hpThresh:0.6, attacks:['rapid_fire','laser_sweep'],        speed:1.5, fireRate:55  }, { hpThresh:0.25,attacks:['rapid_fire','ram_charge'],        speed:2.5, fireRate:30  } ] },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// CORE GAME ENGINE CLASS
-// ═══════════════════════════════════════════════════════════════════════════════
 export class GameEngine {
   constructor(canvas, onStateChange, audio) {
     this.canvas  = canvas;
@@ -171,13 +164,14 @@ export class GameEngine {
     this.keys    = {};
     this.mouse   = {x:0,y:0,down:false,wx:0,wy:0};
 
-    // ─── PHASE 1 PROPERTIES ───────────────────────────────────────────────────
+    // Phase 1 + Phase 3 Property Extensions
     this.joystickInput = { x: 0, y: 0 };
     this.isMobileDevice = false;
     this.mobilePerformanceMode = false;
     this.touchAimingActive = false;
     this.touchAimPos = { x: 0, y: 0 };
-    // ─────────────────────────────────────────────────────────────────────────
+    this.bossesKilledThisRun = 0;
+    this.equipmentBonuses = null;
 
     this.bullets   = new Pool(makeBullet,  b=>{b.active=false;b.trail=[];b.pierceCount=0;b.homing=false;}, 120);
     this.particles = new Pool(makeParticle,p=>{p.active=false;}, 400);
@@ -263,14 +257,12 @@ export class GameEngine {
     };
     this._onMouseDown = (e) => { if (e.button===0) this.mouse.down = true; };
     this._onMouseUp   = (e) => { if (e.button===0) this.mouse.down = false; };
-    
-    // ─── PHASE 1 TOUCH ENGINE BINDINGS ───────────────────────────────────────
+
     this._onTouchStart = (e) => {
       if (!this.player || !this.isMobileDevice) return;
       const rect = this.canvas.getBoundingClientRect();
       const sx = this.canvas.width / rect.width;
       const sy = this.canvas.height / rect.height;
-      
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
         if (t.clientX > window.innerWidth / 2) {
@@ -289,7 +281,6 @@ export class GameEngine {
       const rect = this.canvas.getBoundingClientRect();
       const sx = this.canvas.width / rect.width;
       const sy = this.canvas.height / rect.height;
-      
       for (let i = 0; i < e.touches.length; i++) {
         const t = e.touches[i];
         if (t.clientX > window.innerWidth / 2) {
@@ -305,24 +296,16 @@ export class GameEngine {
       if (!this.isMobileDevice) return;
       let rightTouchActive = false;
       for (let i = 0; i < e.touches.length; i++) {
-        if (e.touches[i].clientX > window.innerWidth / 2) {
-          rightTouchActive = true;
-          break;
-        }
+        if (e.touches[i].clientX > window.innerWidth / 2) { rightTouchActive = true; break; }
       }
-      if (!rightTouchActive) {
-        this.touchAimingActive = false;
-        this.mouse.down = false;
-      }
+      if (!rightTouchActive) { this.touchAimingActive = false; this.mouse.down = false; }
     };
-    // ─────────────────────────────────────────────────────────────────────────
 
     window.addEventListener('keydown',    this._onKey);
     window.addEventListener('keyup',      this._onKey);
     this.canvas.addEventListener('mousemove', this._onMouseMove);
     this.canvas.addEventListener('mousedown', this._onMouseDown);
     this.canvas.addEventListener('mouseup',   this._onMouseUp);
-    
     this.canvas.addEventListener('touchstart', this._onTouchStart, { passive: true });
     this.canvas.addEventListener('touchmove', this._onTouchMove, { passive: true });
     this.canvas.addEventListener('touchend', this._onTouchEnd, { passive: true });
@@ -337,7 +320,6 @@ export class GameEngine {
     this.canvas.removeEventListener('mousemove', this._onMouseMove);
     this.canvas.removeEventListener('mousedown', this._onMouseDown);
     this.canvas.removeEventListener('mouseup',   this._onMouseUp);
-    
     this.canvas.removeEventListener('touchstart', this._onTouchStart);
     this.canvas.removeEventListener('touchmove', this._onTouchMove);
     this.canvas.removeEventListener('touchend', this._onTouchEnd);
@@ -359,12 +341,20 @@ export class GameEngine {
     this.gameOver     = false;
     this.shopOpen     = false;
     this.bossAttackTimer = 0;
+    this.bossesKilledThisRun = 0;
     this.activeEvent  = null;
     this.nextEventTime= rand(60,120);
+    
     if (mode==='speed')    { this.player.xpMult=3; this.player.goldMult=3; this.spawnInterval=60; }
     if (mode==='hardcore') { this.player.maxHp=60; this.player.hp=60; }
     if (mode==='boss')     { this.nextBossTime=30; }
     this.nextBossTime = mode==='boss' ? 30 : 300;
+
+    // Apply Persistent Equipment Modifications if active via Phase 3 Architecture
+    if (this.equipmentBonuses) {
+      applyEquipmentToPlayer(this.player, this.equipmentBonuses);
+    }
+
     this.pods = [];
     this._initPods();
     this._syncUI();
@@ -415,42 +405,28 @@ export class GameEngine {
     if (p.hpRegen > 0) p.hp = Math.min(p.maxHp, p.hp + p.hpRegen*dt*0.016667);
 
     const speed = 220 * p.speedMult; const acc = {x:0,y:0};
-    
-    // ─── MOVEMENT MUTATION ───────────────────────────────────────────────────
     if (this.isMobileDevice && (this.joystickInput.x !== 0 || this.joystickInput.y !== 0)) {
       acc.x = this.joystickInput.x;
       acc.y = this.joystickInput.y;
     } else {
-      if (this.keys['KeyW']||this.keys['ArrowUp'])  acc.y -= 1;
+      if (this.keys['KeyW']||this.keys['ArrowUp'])   acc.y -= 1;
       if (this.keys['KeyS']||this.keys['ArrowDown']) acc.y += 1;
       if (this.keys['KeyA']||this.keys['ArrowLeft']) acc.x -= 1;
       if (this.keys['KeyD']||this.keys['ArrowRight']) acc.x += 1;
     }
     const l = V.len(acc);
     if (l>0) { p.vel = V.lerp(p.vel, V.scale(this.isMobileDevice ? acc : V.norm(acc), speed), 0.18*dt); } else { p.vel = V.lerp(p.vel, V.zero(), 0.15*dt); }
-    // ─────────────────────────────────────────────────────────────────────────
-    
     p.pos = V.add(p.pos, V.scale(p.vel, dt*0.016667));
     
-    // ─── AIMING MUTATION (TOUCH TARGET SCANNING / TRACKING ENGINE) ───────────
     if (this.isMobileDevice) {
       let targetedEnemy = null;
       let shortestDistance = 400;
-      
       this.enemies.forEach(e => {
         if (!e.active || e.spawnFlash > 0) return;
         const d = V.dist(p.pos, e.pos);
-        if (d < shortestDistance) {
-          shortestDistance = d;
-          targetedEnemy = e;
-        }
+        if (d < shortestDistance) { shortestDistance = d; targetedEnemy = e; }
       });
-      
-      if (this.boss && this.boss.active) {
-        if (V.dist(p.pos, this.boss.pos) < shortestDistance) {
-          targetedEnemy = this.boss;
-        }
-      }
+      if (this.boss && this.boss.active && V.dist(p.pos, this.boss.pos) < shortestDistance) { targetedEnemy = this.boss; }
       
       if (this.touchAimingActive) {
         this.mouse.wx = this.touchAimPos.x - this.W/2 + this.camera.x;
@@ -461,18 +437,14 @@ export class GameEngine {
         this.mouse.down = true;
       } else {
         this.mouse.down = false;
-        if (V.len(p.vel) > 0.1) {
-          p.angle = Math.atan2(p.vel.y, p.vel.x);
-        }
+        if (V.len(p.vel) > 0.1) p.angle = Math.atan2(p.vel.y, p.vel.x);
       }
     } else {
       p.angle = Math.atan2(this.mouse.wy - p.pos.y, this.mouse.wx - p.pos.x);
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     this.camera.x = lerp(this.camera.x, p.pos.x, 0.1*dt);
     this.camera.y = lerp(this.camera.y, p.pos.y, 0.1*dt);
-    
     if (!this.isMobileDevice) {
       this.mouse.wx = this.mouse.x - this.W/2 + this.camera.x;
       this.mouse.wy = this.mouse.y - this.H/2 + this.camera.y;
@@ -513,7 +485,7 @@ export class GameEngine {
   }
 
   _useBomb() {
-    const p = this.player; if (!p || p.bombCooldown>0 || p.bombDmg<=0) return;
+    const p = this.player; if (!p || p.bombCooldown/60 > 0 || p.bombDmg<=0) return;
     this._spawnParticles(p.pos, '#fbbf24', 30, 5, 40); this._spawnParticles(p.pos, '#ef4444', 20, 4, 30);
     this.shake = 8; this.audio.explosion();
     this.enemies.forEach(e => {
@@ -549,7 +521,7 @@ export class GameEngine {
           const b = this.bullets.get(); b.active=true; b.owner='player'; b.pos=V.copy(d.pos); b.vel=V.scale(V.norm(V.sub(nearestEnemy.pos, d.pos)),8);
           b.damage=8*p.damageMult; b.radius=3; b.color='#a5f3fc'; b.pierce=0; b.maxLifetime=50; b.lifetime=0; d.shootCooldown = 20;
         } else { d.shootCooldown = 15; }
-      }
+      } else { d.shootCooldown -= dt; }
     });
   }
 
@@ -703,6 +675,7 @@ export class GameEngine {
 
   _killBoss() {
     if (!this.boss || !this.bossData) return;
+    this.bossesKilledThisRun++;
     this._spawnLoot(this.boss.pos, this.bossData.xpDrop, this.bossData.goldDrop);
     this._spawnParticles(this.boss.pos, this.bossData.accent, 60, 7, 80); this._spawnParticles(this.boss.pos, '#fff', 30, 5, 50);
     this.shake=20; this.audio.explosion(); this.player.score += this.bossData.xpDrop*5; this._grantXP(this.bossData.xpDrop * this.player.xpMult);
@@ -750,7 +723,13 @@ export class GameEngine {
     this.gameOver=true; this.running=false;
     setTimeout(()=>{
       this.onStateChange({
-        gameOver:true, finalScore: this.player?this.player.score:0, finalKills: this.player?this.player.kills:0, finalLevel: this.player?this.player.level:1, finalTime: this.sessionTime, finalWave: this.wave,
+        gameOver:true, 
+        finalScore: this.player?this.player.score:0, 
+        finalKills: this.player?this.player.kills:0, 
+        finalLevel: this.player?this.player.level:1, 
+        finalTime: this.sessionTime, 
+        finalWave: this.wave,
+        finalBossesKilled: this.bossesKilledThisRun
       });
     },500);
   }
@@ -790,16 +769,13 @@ export class GameEngine {
   }
 
   _spawnParticles(pos, color, count, speed, maxLife) {
-    // ─── PERFORMANCE THROTTLE ────────────────────────────────────────────────
     const adjustedCount = this.mobilePerformanceMode ? Math.ceil(count * 0.4) : count;
     const maxPoolLimit = this.mobilePerformanceMode ? 120 : 350;
-    
     for (let i=0;i<adjustedCount;i++) {
       if (this.particles.size > maxPoolLimit) return;
       const pt = this.particles.get(); pt.active=true; pt.color=color; pt.pos={x:pos.x,y:pos.y}; const a=rand(0,TAU);
       pt.vel={x:Math.cos(a)*rand(0.5,speed), y:Math.sin(a)*rand(0.5,speed)}; pt.life=rand(maxLife*0.5,maxLife); pt.maxLife=pt.life; pt.size=rand(1.5,4); pt.alpha=1;
     }
-    // ─────────────────────────────────────────────────────────────────────────
   }
 
   _updatePods(dt) {
@@ -834,11 +810,11 @@ export class GameEngine {
     const type=types[randInt(0,types.length-1)];
 
     const configs = {
-      drone:    { hp:20,  radius:12, speed:1.5, damage:8,  xpDrop:10, goldDrop:5,  color:'#ef4444', glowColor:'#ef444466', fireRate:90  },
+      drone:     { hp:20,  radius:12, speed:1.5, damage:8,  xpDrop:10, goldDrop:5,  color:'#ef4444', glowColor:'#ef444466', fireRate:90  },
       kamikaze: { hp:12,  radius:10, speed:2.8, damage:18, xpDrop:15, goldDrop:8,  color:'#f97316', glowColor:'#f9731666', fireRate:0   },
       tank:     { hp:80,  radius:20, speed:0.8, damage:15, xpDrop:40, goldDrop:25, color:'#6b7280', glowColor:'#6b728066', fireRate:75  },
       sniper:   { hp:30,  radius:13, speed:1.2, damage:28, xpDrop:30, goldDrop:15, color:'#8b5cf6', glowColor:'#8b5cf666', fireRate:130 },
-      swarm:    { hp:8,   radius:8,  speed:2.2, damage:5,  xpDrop:6,  goldDrop:3,  color:'#facc15', glowColor:'#facc1566', fireRate:0   },
+      swarm:     { hp:8,   radius:8,  speed:2.2, damage:5,  xpDrop:6,  goldDrop:3,  color:'#facc15', glowColor:'#facc1566', fireRate:0   },
     };
     const cfg = configs[type]; const e = makeEnemy();
     Object.assign(e, { pos, vel:{x:0,y:0}, angle:0, hp: cfg.hp * waveScale, maxHp: cfg.hp * waveScale, radius:cfg.radius, type, color:cfg.color, glowColor:cfg.glowColor, speed:cfg.speed, damage:cfg.damage*(0.8+this.wave*0.1), xpDrop:cfg.xpDrop, goldDrop:cfg.goldDrop, fireRate:cfg.fireRate, shootCooldown:cfg.fireRate, active:true, flash:0, spawnFlash:30, });
@@ -857,7 +833,7 @@ export class GameEngine {
       for (let i=0;i<8;i++) setTimeout(()=>{
         if (!this.player||this.player.dead) return;
         const e=makeEnemy(); Object.assign(e,{pos:{x:this.player.pos.x+rand(-400,400),y:this.player.pos.y-500}, vel:{x:rand(-1,1),y:rand(5,8)},hp:30,maxHp:30,radius:15,type:'kamikaze',color:'#9ca3af',glowColor:'#9ca3af66',speed:0,damage:20,xpDrop:20,goldDrop:12,fireRate:0,shootCooldown:999,active:true,flash:0,spawnFlash:0}); this.enemies.push(e);
-      }, i*500);
+      },i*500);
     } else if (evt === 'gold_rush' && this.player) {
       this.player.goldMult *= 2; setTimeout(()=>{ if(this.player) this.player.goldMult /= 2; }, 60000);
     } else if (evt === 'emp_pulse') {
@@ -883,7 +859,7 @@ export class GameEngine {
   _syncUI() {
     if (!this.player) return;
     this.onStateChange({
-      hp: Math.max(0,this.player.hp), maxHp: this.player.maxHp, shield: this.player.shield, shieldMax: this.player.shieldMax, xp: this.player.xp, xpToNext: this.player.xpToNext, level: this.player.level, gold: Math.floor(this.player.gold), score: this.player.score, kills: this.player.kills, wave: this.wave, sessionTime: this.sessionTime, bossHp: this.boss ? this.boss.hp : 0, bossMaxHp: this.boss ? this.boss.maxHp : 0, dashReady: this.player.dashCooldown<=0, bombReady: this.player.bombCooldown<=0 && this.player.bombDmg>0, bombDmg: this.player.bombDmg, drones: this.player.drones, purchasedItems: this.purchasedItems, shopOpen: this.shopOpen
+      hp: Math.max(0,this.player.hp), maxHp: this.player.maxHp, shield: this.player.shield, shieldMax: this.player.shieldMax, xp: this.player.xp, xpToNext: this.player.xpToNext, level: this.player.level, gold: Math.floor(this.player.gold), score: this.player.score, kills: this.player.kills, wave: this.wave, sessionTime: this.sessionTime, bossHp: this.boss ? this.boss.hp : 0, bossMaxHp: this.boss ? this.boss.maxHp : 0, dashReady: this.player.dashCooldown<=0, bombReady: this.player.dashCooldown<=0 && this.player.bombDmg>0, bombDmg: this.player.bombDmg, drones: this.player.drones, purchasedItems: this.purchasedItems, shopOpen: this.shopOpen
     });
   }
 
@@ -904,7 +880,6 @@ export class GameEngine {
   }
 
   _renderNebulae() {
-    // Skip expensive multi-layered blur radial rendering layers if performance throttling is toggled
     if (this.mobilePerformanceMode) return;
     const cx = this.camera.x, cy=this.camera.y;
     [{x:-300,y:-200,r:400,c:'rgba(124,58,237,0.06)'},{x:500,y:300,r:350,c:'rgba(6,182,212,0.05)'},{x:-100,y:500,r:500,c:'rgba(239,68,68,0.04)'},{x:800,y:-400,r:300,c:'rgba(52,211,153,0.04)'}].forEach(n=>{
@@ -917,7 +892,6 @@ export class GameEngine {
     this.stars.forEach(s=>{
       const alpha=s.alpha*(0.7+0.3*Math.sin(this.tick*0.02+s.twinkle)); this.ctx.globalAlpha=alpha; this.ctx.fillStyle='#fff'; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.1),s.y-(this.camera.y*0.1),s.size,0,TAU); this.ctx.fill();
     });
-    // Skip optional secondary parallax star layer on performance-restricted mobile frames
     if (!this.mobilePerformanceMode) {
       this.starsNear.forEach(s=>{ this.ctx.globalAlpha=s.alpha; this.ctx.fillStyle=s.color; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.4),s.y-(this.camera.y*0.4),s.size,0,TAU); this.ctx.fill(); });
     }
@@ -927,8 +901,7 @@ export class GameEngine {
   _renderPods() {
     this.pods.forEach(pod=>{
       if(!pod.active) return; const pulse=0.85+0.15*Math.sin(pod.pulse); this.ctx.save(); this.ctx.translate(pod.pos.x,pod.pos.y); this.ctx.rotate(pod.spin); 
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 15; 
-      this.ctx.shadowColor=pod.type==='powerup'?'#fbbf24':'#60a5fa';
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 15; this.ctx.shadowColor=pod.type==='powerup'?'#fbbf24':'#60a5fa';
       const grad=this.ctx.createRadialGradient(0,0,0,0,0,pod.radius*pulse);
       if (pod.type==='powerup') { grad.addColorStop(0,'#fef9c3'); grad.addColorStop(0.6,'#fbbf24'); grad.addColorStop(1,'#92400e'); } else { grad.addColorStop(0,'#e0f2fe'); grad.addColorStop(0.6,'#60a5fa'); grad.addColorStop(1,'#1e3a5f'); }
       this.ctx.fillStyle=grad; this.ctx.beginPath();
@@ -943,8 +916,7 @@ export class GameEngine {
   _renderLoot() {
     this.loot.forEach(l=>{
       if(!l.active) return; const pulse=0.8+0.2*Math.sin(l.pulse); this.ctx.save(); this.ctx.translate(l.pos.x,l.pos.y); 
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 10; 
-      this.ctx.shadowColor=l.color; this.ctx.fillStyle=l.color; this.ctx.globalAlpha=0.9+0.1*pulse; this.ctx.beginPath();
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 10; this.ctx.shadowColor=l.color; this.ctx.fillStyle=l.color; this.ctx.globalAlpha=0.9+0.1*pulse; this.ctx.beginPath();
       if(l.type==='gold') { this.ctx.arc(0,0,l.radius*pulse,0,TAU); } else { this.ctx.moveTo(0,-l.radius*pulse); this.ctx.lineTo(l.radius*0.7*pulse,0); this.ctx.lineTo(0,l.radius*pulse); this.ctx.lineTo(-l.radius*0.7*pulse,0); this.ctx.closePath(); }
       this.ctx.fill(); this.ctx.restore();
     });
@@ -965,9 +937,7 @@ export class GameEngine {
     this.bullets.forEach(b=>{
       if(!b.active) return; this.ctx.save();
       if(b.trail.length>1) { this.ctx.globalAlpha=0.35; this.ctx.strokeStyle=b.color; this.ctx.lineWidth=b.radius*0.8; this.ctx.lineCap='round'; this.ctx.beginPath(); this.ctx.moveTo(b.trail[0].x,b.trail[0].y); b.trail.forEach(pt=>this.ctx.lineTo(pt.x,pt.y)); this.ctx.stroke(); }
-      this.ctx.globalAlpha=1; 
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : (b.owner==='player'?12:8); 
-      this.ctx.shadowColor=b.color; this.ctx.fillStyle=b.color; this.ctx.beginPath(); this.ctx.arc(b.pos.x,b.pos.y,b.radius,0,TAU); this.ctx.fill(); this.ctx.restore();
+      this.ctx.globalAlpha=1; this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (b.owner==='player'?12:8); this.ctx.shadowColor=b.color; this.ctx.fillStyle=b.color; this.ctx.beginPath(); this.ctx.arc(b.pos.x,b.pos.y,b.radius,0,TAU); this.ctx.fill(); this.ctx.restore();
     });
     this.ctx.shadowBlur=0;
   }
@@ -976,8 +946,7 @@ export class GameEngine {
     this.enemies.forEach(e=>{
       if(!e.active) return; this.ctx.save(); this.ctx.translate(e.pos.x,e.pos.y); this.ctx.rotate(e.angle+Math.PI/2);
       if(e.spawnFlash>0) this.ctx.globalAlpha=1-(e.spawnFlash/30);
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : (e.flash>0?20:12); 
-      this.ctx.shadowColor=e.flash>0?'#fff':e.glowColor; this.ctx.fillStyle=e.flash>0?'#fff':e.color;
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (e.flash>0?20:12); this.ctx.shadowColor=e.flash>0?'#fff':e.glowColor; this.ctx.fillStyle=e.flash>0?'#fff':e.color;
       const r=e.radius;
       if(e.type === 'drone') { this.ctx.beginPath(); this.ctx.moveTo(0,-r); this.ctx.lineTo(-r*0.7,r*0.8); this.ctx.lineTo(0,r*0.4); this.ctx.lineTo(r*0.7,r*0.8); this.ctx.closePath(); this.ctx.fill(); }
       else if(e.type === 'kamikaze') { this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r,r); this.ctx.lineTo(r,r); this.ctx.closePath(); this.ctx.fill(); }
@@ -993,8 +962,7 @@ export class GameEngine {
   _renderBoss() {
     const b=this.boss; if(!b||!b.active) return; this.ctx.save(); this.ctx.translate(b.pos.x,b.pos.y);
     if(b.spawnFlash>0) this.ctx.globalAlpha=1-(b.spawnFlash/60);
-    this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : (b.flash>0?40:25); 
-    this.ctx.shadowColor=b.flash>0?'#fff':this.bossData.accent;
+    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (b.flash>0?40:25); this.ctx.shadowColor=b.flash>0?'#fff':this.bossData.accent;
     this.ctx.strokeStyle=this.bossData.accent; this.ctx.lineWidth=3; this.ctx.globalAlpha=(this.ctx.globalAlpha||1)*0.4; this.ctx.beginPath(); this.ctx.arc(0,0,b.radius+12+Math.sin(this.tick*0.05)*5,0,TAU); this.ctx.stroke();
     this.ctx.globalAlpha=b.spawnFlash>0?(1-b.spawnFlash/60):1;
     const grad=this.ctx.createRadialGradient(0,0,0,0,0,b.radius); grad.addColorStop(0,this.bossData.accent+'cc'); grad.addColorStop(0.5,this.bossData.color+'ee'); grad.addColorStop(1,'#00000000'); this.ctx.fillStyle=grad; this.ctx.rotate(b.angle*0.5); this.ctx.beginPath();
@@ -1013,22 +981,16 @@ export class GameEngine {
     this.ctx.save(); this.ctx.translate(p.pos.x,p.pos.y); this.ctx.rotate(p.angle+Math.PI/2);
     if(p.invuln && Math.floor(this.tick/3)%2===0) { this.ctx.restore(); return; }
     if(p.shield>0) { this.ctx.shadowBlur=0; this.ctx.strokeStyle='rgba(96,165,250,0.5)'; this.ctx.lineWidth=2; this.ctx.beginPath(); this.ctx.arc(0,0,p.radius+8+Math.sin(this.tick*0.1)*2,0,TAU); this.ctx.stroke(); }
-    this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 20; 
-    this.ctx.shadowColor='#7c3aed'; const r=p.radius; const grad=this.ctx.createLinearGradient(0,-r,0,r); grad.addColorStop(0,'#c4b5fd'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'#4c1d95'); this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r*0.8,r*0.6); this.ctx.lineTo(-r*0.35,r*0.2); this.ctx.lineTo(0,r*0.5); this.ctx.lineTo(r*0.35,r*0.2); this.ctx.lineTo(r*0.8,r*0.6); this.ctx.closePath(); this.ctx.fill();
-    this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 8; 
-    this.ctx.shadowColor='#38bdf8'; this.ctx.fillStyle='#bae6fd'; this.ctx.beginPath(); this.ctx.arc(0,-r*0.3,r*0.28,0,TAU); this.ctx.fill();
+    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 20; this.ctx.shadowColor='#7c3aed'; const r=p.radius; const grad=this.ctx.createLinearGradient(0,-r,0,r); grad.addColorStop(0,'#c4b5fd'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'#4c1d95'); this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r*0.8,r*0.6); this.ctx.lineTo(-r*0.35,r*0.2); this.ctx.lineTo(0,r*0.5); this.ctx.lineTo(r*0.35,r*0.2); this.ctx.lineTo(r*0.8,r*0.6); this.ctx.closePath(); this.ctx.fill();
+    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 8; this.ctx.shadowColor='#38bdf8'; this.ctx.fillStyle='#bae6fd'; this.ctx.beginPath(); this.ctx.arc(0,-r*0.3,r*0.28,0,TAU); this.ctx.fill();
     if(V.len(p.vel)>0.3){
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 12; 
-      this.ctx.shadowColor='#fbbf24'; const exGrad=this.ctx.createLinearGradient(0,r*0.4,0,r*1.4); exGrad.addColorStop(0,'#fbbf24aa'); exGrad.addColorStop(1,'transparent'); this.ctx.fillStyle=exGrad; this.ctx.beginPath(); this.ctx.moveTo(-r*0.3,r*0.4); this.ctx.lineTo(r*0.3,r*0.4); this.ctx.lineTo((Math.random()-0.5)*r*0.3,r*(1+Math.random()*0.5)); this.ctx.closePath(); this.ctx.fill();
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#fbbf24'; const exGrad=this.ctx.createLinearGradient(0,r*0.4,0,r*1.4); exGrad.addColorStop(0,'#fbbf24aa'); exGrad.addColorStop(1,'transparent'); this.ctx.fillStyle=exGrad; this.ctx.beginPath(); this.ctx.moveTo(-r*0.3,r*0.4); this.ctx.lineTo(r*0.3,r*0.4); this.ctx.lineTo((Math.random()-0.5)*r*0.3,r*(1+Math.random()*0.5)); this.ctx.closePath(); this.ctx.fill();
     }
     this.ctx.restore(); this.ctx.shadowBlur=0; this.ctx.globalAlpha=1;
   }
 
   _renderDrones() {
-    this.activeDrones.forEach(d=>{ if(d.active) { this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle); 
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 12; 
-      this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9'; this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill(); this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill(); this.ctx.restore(); } });
+    this.activeDrones.forEach(d=>{ if(d.active) { this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle); this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9'; this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill(); this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill(); this.ctx.restore(); } });
     this.ctx.shadowBlur=0;
   }
 }
-//test
