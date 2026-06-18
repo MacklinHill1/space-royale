@@ -2,8 +2,9 @@
 
 import React, { useRef, useEffect, useState, useCallback, Suspense } from 'react';
 import { GameEngine, AudioEngine, UPGRADES, RARITY_COLOR, RARITY_GLOW } from './game/GameEngine';
-import InventoryScreen from '../../ui/screens/InventoryScreen';
+import GearHangarScreen, { LootSummary, PickupNotification } from '../../ui/screens/GearHangarScreen';
 import { usePersistence } from '../../hooks/usePersistence';
+import { RARITY_COLORS } from '../../constants/EquipmentData';
 
 function HomepageSeoContent() {
   return (
@@ -411,6 +412,104 @@ function GameOverScreen({ state, onRestart, onMenu }) {
 function LevelUpFlash({ level }) { return <div style={{ position:'absolute',top:'30%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:40,color:'#fbbf24',fontWeight:'700',fontFamily:'"Courier New",monospace' }}>⭐ LEVEL UP! (Lvl {level}) ⭐</div>; }
 function BossAlert({ name }) { return <div style={{ position:'absolute',top:'20%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:45,color:'#ef4444',fontWeight:'900',fontFamily:'"Courier New",monospace' }}>⚠ BOSS APPROACHING: {name?.toUpperCase()} ⚠</div>; }
 
+
+function BossDropBanner({ items, bossName }) {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '18%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(5,8,20,0.97)',
+        border: '1px solid rgba(251,191,36,0.6)',
+        borderRadius: 14,
+        padding: '14px 24px',
+        fontFamily: '"Courier New", monospace',
+        zIndex: 60,
+        textAlign: 'center',
+        boxShadow: '0 0 40px rgba(251,191,36,0.3)',
+        pointerEvents: 'none',
+        minWidth: 320,
+      }}
+    >
+      <div
+        style={{
+          color: '#fbbf24',
+          fontWeight: 900,
+          fontSize: '0.85rem',
+          marginBottom: 8,
+          letterSpacing: '0.1em',
+        }}
+      >
+        ⚔ {bossName ? bossName.toUpperCase() : 'BOSS'} DEFEATED — LOOT DROPPED
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+        }}
+      >
+        {items.map((item, i) => {
+          const color =
+            {
+              common: '#9ca3af',
+              uncommon: '#4ade80',
+              rare: '#60a5fa',
+              epic: '#c084fc',
+              legendary: '#fbbf24',
+              mythic: '#ff6b35',
+              secret: '#ff00ff',
+            }[item.rarity] || '#9ca3af';
+
+          return (
+            <div
+              key={item.instanceId || i}
+              style={{
+                background: 'rgba(0,0,0,0.5)',
+                border: `1px solid ${color}66`,
+                borderRadius: 8,
+                padding: '6px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+
+              <div>
+                <div
+                  style={{
+                    color,
+                    fontSize: '0.7rem',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {item.rarity.toUpperCase()}
+                </div>
+
+                <div
+                  style={{
+                    color: '#e2e8f0',
+                    fontSize: '0.72rem',
+                  }}
+                >
+                  {item.name}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function SpaceRocketRoyale() {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
@@ -421,8 +520,11 @@ export default function SpaceRocketRoyale() {
   const [gameMode, setGameMode] = useState('endless');
   const [engine, setEngine] = useState(null);
 
-  const { save, getBestScore, recordRunResult, forceManualSync } = usePersistence();
+  const { save, getBestScore, recordRunResult, addRunLootToProfile, forceManualSync } = usePersistence();
   const bestScore = getBestScore(gameMode);
+  const [pickupItem, setPickupItem] = useState(null);
+  const [lootSummary, setLootSummary] = useState(null); // { items, xp, coins, bosses }
+  const pickupTimerRef = useRef(null);
 
   const containerRef = useRef(null);
   useEffect(() => {
@@ -439,21 +541,39 @@ export default function SpaceRocketRoyale() {
   }, []);
 
   const handleStateChange = useCallback((update) => {
-    setGameState(prev => {
-      const next = { ...prev, ...update };
-      if (update.gameOver) { 
-        recordRunResult({
-          mode: gameMode,
-          score: update.finalScore,
-          kills: update.finalKills,
-          level: update.finalLevel,
-          wave: update.finalWave,
-          sessionTime: update.finalTime
+    setGameState(prev => ({ ...prev, ...update }));
+
+    if (update.gameOver) {
+      recordRunResult({
+        mode: gameMode,
+        score: update.finalScore,
+        kills: update.finalKills,
+        level: update.finalLevel,
+        wave: update.finalWave,
+        sessionTime: update.finalTime,
+      });
+      // Show loot summary before game over screen
+      if (update.runLoot && update.runLoot.length > 0) {
+        setLootSummary({
+          items:   update.runLoot,
+          xp:      update.finalXP,
+          coins:   update.finalGold,
+          bosses:  update.finalBossesKilled,
         });
+      } else {
+        setScreen('gameover');
       }
-      return next;
-    });
-    if (update.gameOver) setScreen('gameover');
+    }
+
+    // Pickup notification
+    if (update.equipmentPickup) {
+      setPickupItem(update.equipmentPickup);
+      if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
+      pickupTimerRef.current = setTimeout(() => setPickupItem(null), 3200);
+    }
+    if (update.equipmentPickup === null) {
+      setPickupItem(null);
+    }
   }, [gameMode, recordRunResult]);
 
   const startGame = useCallback((mode) => {
@@ -462,7 +582,7 @@ export default function SpaceRocketRoyale() {
     setTimeout(() => {
       if (!canvasRef.current) return;
       const eng = new GameEngine(canvasRef.current, handleStateChange, audioRef.current);
-      eng.equipmentBonuses = save?.equippedItems || null;
+      eng.equipmentBonuses = save?.gearLoadout || null;
       engineRef.current = eng; 
       setEngine(eng); 
       eng.startGame(mode);
@@ -473,9 +593,17 @@ export default function SpaceRocketRoyale() {
   const goMenu = useCallback(() => { if (engineRef.current) { engineRef.current.destroy(); engineRef.current = null; } setScreen('menu'); setGameState({}); }, []);
 
   const handleProfileUpdate = useCallback((updatedSave) => {
-    localStorage.setItem('srr_save', JSON.stringify(updatedSave));
+    try { localStorage.setItem('srr_save', JSON.stringify(updatedSave)); } catch(e){}
     forceManualSync(updatedSave);
   }, [forceManualSync]);
+
+  // Called from LootSummary "Save to Gear Hangar" button
+  const handleSaveLoot = useCallback(() => {
+    if (!lootSummary?.items?.length) { setLootSummary(null); setScreen('gameover'); return; }
+    addRunLootToProfile(lootSummary.items);
+    setLootSummary(null);
+    setScreen('gameover');
+  }, [lootSummary, addRunLootToProfile]);
 
   useEffect(() => () => { if (engineRef.current) engineRef.current.destroy(); }, []);
 
@@ -500,7 +628,7 @@ export default function SpaceRocketRoyale() {
             )}
 
             {screen === 'inventory' && (
-              <InventoryScreen
+              <GearHangarScreen
                 profile={save}
                 onProfileUpdate={handleProfileUpdate}
                 onBack={goMenu}
@@ -513,7 +641,21 @@ export default function SpaceRocketRoyale() {
                 {gameState.shopOpen && engine && <ShopModal engine={engine} gold={gameState.gold || 0} purchasedItems={gameState.purchasedItems || []} />}
                 {gameState.levelUp && <LevelUpFlash level={gameState.level} />}
                 {gameState.bossAlert && gameState.bossName && <BossAlert name={gameState.bossName} />}
+                {gameState.bossDropItems && gameState.bossDropItems.length > 0 && (
+                  <BossDropBanner items={gameState.bossDropItems} bossName={gameState.bossDropBossName} />
+                )}
+                {pickupItem && <PickupNotification item={pickupItem} />}
               </>
+            )}
+
+            {lootSummary && (
+              <LootSummary
+                lootItems={lootSummary.items}
+                xpEarned={lootSummary.xp}
+                coinsEarned={lootSummary.coins}
+                bossesDefeated={lootSummary.bosses}
+                onClose={handleSaveLoot}
+              />
             )}
 
             {screen === 'gameover' && <GameOverScreen state={gameState} onRestart={restartGame} onMenu={goMenu} />}

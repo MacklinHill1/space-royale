@@ -1,6 +1,15 @@
 // src/app/game/GameEngine.js
 
 import { applyEquipmentToPlayer } from '../../../systems/EquipmentSystem.js';
+import {
+  makeEquipmentDrop,
+  resetEquipmentDrop,
+  spawnBossEquipmentDrops,
+  spawnChestEquipmentDrop,
+  updateEquipmentDrops,
+  renderEquipmentDrops,
+} from '../../../systems/EquipmentDropSystem.js';
+import { RARITY_COLORS, RARITY_BEAM_HEIGHT, BOSS_DROP_TABLES } from '../../../constants/EquipmentData.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MATH UTILITIES
@@ -175,7 +184,7 @@ const makeParticle = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, color:'#fff', alpha:
 const makeLoot = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, type:'xp', value:10, radius:6, color:'#38bdf8', active:false, pulse:0, attracted:false, });
 const makeDrone = () => ({ pos:{x:0,y:0}, angle:0, orbitAngle:0, shootCooldown:0, active:false, });
 const makeChest = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, tier:'COMMON_CACHE', radius:20, active:false, pulse:0, spin:0, opened:false, });
-const makeEquipmentDrop = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, item:null, radius:12, active:false, pulse:0, beam:0, attracted:false, });
+
 
 const BOSSES = [
   { name:'Asteroid Titan', color:'#92400e', accent:'#fbbf24', radius:55, hpBase:800, xpDrop:500, goldDrop:300, chestTier: 'RARE_CRATE', equipRarities: ['common','uncommon','rare'], phases:[ { hpThresh:1.0, attacks:['boulder_throw','orbit_rocks'],  speed:1.2, fireRate:90  }, { hpThresh:0.5, attacks:['boulder_throw','laser_sweep'],  speed:1.8, fireRate:60  }, { hpThresh:0.2, attacks:['rapid_fire','laser_sweep'],     speed:2.2, fireRate:35  } ] },
@@ -207,13 +216,20 @@ export class GameEngine {
     this.touchAimPos = { x: 0, y: 0 };
     this.bossesKilledThisRun = 0;
     this.equipmentBonuses = null;
+    this.runLootCollected = [];
+    this.runLootCount = 0;
+    this.secretRunStats = {
+      uniqueBossesKilled: new Set(),
+      bossKilledAtLowHP: false,
+      lootCollected: 0,
+    };
 
     this.bullets   = new Pool(makeBullet,  b=>{b.active=false;b.trail=[];b.pierceCount=0;b.homing=false;}, 120);
     this.particles = new Pool(makeParticle,p=>{p.active=false;}, 400);
     this.loot      = new Pool(makeLoot,    l=>{l.active=false;l.attracted=false;}, 150);
     this.droneParts= new Pool(makeDrone,   d=>{d.active=false;}, 8);
     this.chests    = new Pool(makeChest,   c=>{c.active=false;c.opened=false;}, 20);
-    this.equipDrops= new Pool(makeEquipmentDrop, e=>{e.active=false;e.attracted=false;}, 30);
+    this.equipDrops= new Pool(makeEquipmentDrop, resetEquipmentDrop, 30);
 
     this.player       = null;
     this.enemies      = [];
@@ -384,6 +400,9 @@ export class GameEngine {
     this.shopOpen     = false;
     this.bossAttackTimer = 0;
     this.bossesKilledThisRun = 0;
+    this.runLootCollected = [];
+    this.runLootCount = 0;
+    this.secretRunStats = { uniqueBossesKilled: new Set(), bossKilledAtLowHP: false, lootCollected: 0 };
     this.activeEvent  = null;
     this.nextEventTime= rand(60,120);
     
@@ -392,9 +411,13 @@ export class GameEngine {
     if (mode==='boss')     { this.nextBossTime=30; }
     this.nextBossTime = mode==='boss' ? 30 : 300;
 
-    // Apply Persistent Equipment Modifications if active via Phase 3 Architecture
+    // Apply Gear Hangar loadout bonuses to player
     if (this.equipmentBonuses) {
       applyEquipmentToPlayer(this.player, this.equipmentBonuses);
+      // Sync drone count from gear
+      if (this.player.gearDrones) {
+        this.player.drones = (this.player.drones || 0) + this.player.gearDrones;
+      }
     }
 
     this.pods = [];
@@ -723,12 +746,38 @@ export class GameEngine {
   _killBoss() {
     if (!this.boss || !this.bossData) return;
     this.bossesKilledThisRun++;
-    this._spawnLoot(this.boss.pos, this.bossData.xpDrop, this.bossData.goldDrop);
-    this._spawnChest(this.boss.pos, this.bossData.chestTier);
-    this._spawnEquipmentDrop(this.boss.pos, this.bossData.equipRarities);
-    this._spawnParticles(this.boss.pos, this.bossData.accent, 60, 7, 80); this._spawnParticles(this.boss.pos, '#fff', 30, 5, 50);
-    this.shake=20; this.audio.explosion(); this.player.score += this.bossData.xpDrop*5; this._grantXP(this.bossData.xpDrop * this.player.xpMult);
-    this.boss.active=false; this.boss=null; this.bossData=null; this.onStateChange({bossName:null});
+    const bossPos = { ...this.boss.pos };
+    const bossName = this.bossData.name;
+    const bossHpWasLow = (this.boss.hp / this.boss.maxHp) < 0.10;
+
+    // Track secret drop conditions
+    this.secretRunStats.uniqueBossesKilled.add(bossName);
+    if (bossHpWasLow) this.secretRunStats.bossKilledAtLowHP = true;
+
+    this._spawnLoot(bossPos, this.bossData.xpDrop, this.bossData.goldDrop);
+    this._spawnChest(bossPos, this.bossData.chestTier);
+
+    // Spawn equipment drops via new system
+    const items = spawnBossEquipmentDrops(
+      this.equipDrops, bossPos, bossName, this.wave,
+      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+    );
+    // Notify UI about drops
+    if (items.length > 0) {
+      this.onStateChange({ bossDropItems: items, bossDropBossName: bossName });
+      setTimeout(() => this.onStateChange({ bossDropItems: null }), 4000);
+    }
+
+    this._spawnParticles(bossPos, this.bossData.accent, 60, 7, 80);
+    this._spawnParticles(bossPos, '#fff', 30, 5, 50);
+    this.shake = 20;
+    this.audio.explosion();
+    this.player.score += this.bossData.xpDrop * 5;
+    this._grantXP(this.bossData.xpDrop * this.player.xpMult);
+    this.boss.active = false;
+    this.boss = null;
+    this.bossData = null;
+    this.onStateChange({ bossName: null });
   }
 
   _updateBullets(dt) {
@@ -768,19 +817,24 @@ export class GameEngine {
   }
 
   _endGame(died) {
-    if (this.player) this.player.dead=true;
-    this.gameOver=true; this.running=false;
-    setTimeout(()=>{
+    if (this.player) this.player.dead = true;
+    this.gameOver = true;
+    this.running  = false;
+    const loot = [...this.runLootCollected];
+    setTimeout(() => {
       this.onStateChange({
-        gameOver:true, 
-        finalScore: this.player?this.player.score:0, 
-        finalKills: this.player?this.player.kills:0, 
-        finalLevel: this.player?this.player.level:1, 
-        finalTime: this.sessionTime, 
-        finalWave: this.wave,
-        finalBossesKilled: this.bossesKilledThisRun
+        gameOver: true,
+        finalScore:        this.player ? this.player.score  : 0,
+        finalKills:        this.player ? this.player.kills  : 0,
+        finalLevel:        this.player ? this.player.level  : 1,
+        finalTime:         this.sessionTime,
+        finalWave:         this.wave,
+        finalBossesKilled: this.bossesKilledThisRun,
+        finalGold:         this.player ? Math.floor(this.player.gold) : 0,
+        finalXP:           this.player ? Math.floor(this.player.xp)   : 0,
+        runLoot:           loot,
       });
-    },500);
+    }, 500);
   }
 
   _updateLoot(dt) {
@@ -822,18 +876,7 @@ export class GameEngine {
     this._spawnParticles(chest.pos, CHEST_TIERS[tierKey].color, 20, 3, 30);
   }
 
-  _spawnEquipmentDrop(pos, rarityPool) {
-    const rarity = rarityPool[randInt(0, rarityPool.length - 1)];
-    const drop = this.equipDrops.get();
-    drop.active = true;
-    drop.pos = {x: pos.x + rand(-60, 60), y: pos.y + rand(-60, 60)};
-    drop.vel = {x: rand(-2, 2), y: rand(-2, 2)};
-    drop.item = { name: `${rarity} Equipment`, rarity, stats: {} };
-    drop.pulse = 0;
-    drop.beam = 0;
-    drop.attracted = false;
-    this._spawnParticles(drop.pos, RARITY_COLOR[rarity], 15, 3, 25);
-  }
+  // _spawnEquipmentDrop replaced by EquipmentDropSystem.spawnBossEquipmentDrops
 
   _updateChests(dt) {
     const p = this.player;
@@ -866,7 +909,10 @@ export class GameEngine {
     this._grantXP(xp);
     
     if (Math.random() < rewards.equipChance) {
-      this._spawnEquipmentDrop(chest.pos, ['common', 'rare', 'epic']);
+      spawnChestEquipmentDrop(
+        this.equipDrops, chest.pos, this.wave,
+        (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+      );
     }
     
     if (Math.random() < rewards.abilityChance) {
@@ -887,31 +933,19 @@ export class GameEngine {
   _updateEquipmentDrops(dt) {
     const p = this.player;
     if (!p) return;
-    this.equipDrops.forEach(e => {
-      if (!e.active) return;
-      e.pulse += 0.08 * dt;
-      e.beam += 0.1 * dt;
-      
-      if (e.attracted) {
-        const dir = V.norm(V.sub(p.pos, e.pos));
-        e.vel.x = (e.vel.x + dir.x * 5 * dt) * 0.88;
-        e.vel.y = (e.vel.y + dir.y * 5 * dt) * 0.88;
-      } else {
-        e.vel.x *= 0.96;
-        e.vel.y *= 0.96;
-        if (V.dist(e.pos, p.pos) < 80) e.attracted = true;
-      }
-      
-      e.pos.x += e.vel.x * dt;
-      e.pos.y += e.vel.y * dt;
-      
-      if (V.dist(e.pos, p.pos) < e.radius + p.radius + 6) {
-        this.onStateChange({ equipmentPickup: e.item });
-        this._spawnParticles(e.pos, RARITY_COLOR[e.item.rarity], 20, 4, 30);
+    updateEquipmentDrops(
+      this.equipDrops, p, dt,
+      (item) => {
+        // Item picked up
+        this.runLootCollected.push(item);
+        this.runLootCount++;
+        this.secretRunStats.lootCollected++;
+        this.onStateChange({ equipmentPickup: item });
         this.audio.powerup();
-        this.equipDrops.release(e);
-      }
-    });
+        setTimeout(() => this.onStateChange({ equipmentPickup: null }), 3000);
+      },
+      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+    );
   }
 
   _updateAbilities(dt) {
@@ -1226,41 +1260,7 @@ export class GameEngine {
   }
 
   _renderEquipmentDrops() {
-    this.equipDrops.forEach(e => {
-      if (!e.active) return;
-      const pulse = 0.85 + 0.15 * Math.sin(e.pulse);
-      const color = RARITY_COLOR[e.item.rarity];
-      
-      this.ctx.save();
-      this.ctx.translate(e.pos.x, e.pos.y);
-      
-      if (!this.mobilePerformanceMode) {
-        this.ctx.globalAlpha = 0.3;
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(0, -200);
-        this.ctx.lineTo(0, -e.radius * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-      }
-      
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 15;
-      this.ctx.shadowColor = color;
-      
-      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, e.radius * pulse);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.4, color);
-      grad.addColorStop(1, color + '00');
-      
-      this.ctx.fillStyle = grad;
-      this.ctx.beginPath();
-      this.ctx.arc(0, 0, e.radius * pulse, 0, TAU);
-      this.ctx.fill();
-      
-      this.ctx.restore();
-    });
-    this.ctx.shadowBlur = 0;
+    renderEquipmentDrops(this.ctx, this.equipDrops, this.tick, this.mobilePerformanceMode);
   }
 
   _renderToxicClouds() {

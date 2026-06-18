@@ -1,9 +1,10 @@
-// src/hooks/usePersistence.js
+// hooks/usePersistence.js
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { getInitialLoadout } from '../constants/EquipmentData.js';
 
 const SAVE_KEY = 'srr_save';
-const CURRENT_SAVE_VERSION = 1;
+const CURRENT_SAVE_VERSION = 2;
 
 const DEFAULT_SAVE = {
   version: CURRENT_SAVE_VERSION,
@@ -14,23 +15,18 @@ const DEFAULT_SAVE = {
     hardcore: 0,
     time:     0,
   },
-  inventory: [],
-  equippedItems: {
-    weapon: null,
-    armor: null,
-    utility: null,
-    mod1: null,
-    mod2: null,
-  },
   gold: 0,
+  // ── GEAR HANGAR (equipment only) ──────────────────────────
+  gearInventory: [],      // Item[] — all collected gear pieces
+  gearLoadout:   null,    // populated with getInitialLoadout() on first access
+  // ── INVENTORY (chests, boosts, consumables, etc.) ─────────
+  inventory: [],
+  // ── ABILITIES ──────────────────────────────────────────────
   unlockedAbilities: [],
   equippedAbilities: {
-    active1: null,
-    active2: null,
-    passive1: null,
-    passive2: null,
-    weapon: null,
-    drone: null,
+    active1: null, active2: null,
+    passive1: null, passive2: null,
+    weapon: null, drone: null,
   },
 };
 
@@ -45,14 +41,41 @@ function loadRaw() {
   }
 }
 
+function migrate(raw) {
+  if (!raw) return null;
+  // v1 → v2: rename equippedItems → gearLoadout, add gearInventory
+  if (!raw.version || raw.version < 2) {
+    const migrated = { ...raw, version: 2 };
+    if (raw.equippedItems && !raw.gearLoadout) {
+      // Map old 5-slot layout to new 9-slot
+      const old = raw.equippedItems;
+      migrated.gearLoadout = {
+        ...getInitialLoadout(),
+        weapon:   old.weapon   || null,
+        armor:    old.armor    || null,
+        module_a: old.mod1     || null,
+        module_b: old.mod2     || null,
+      };
+      delete migrated.equippedItems;
+    }
+    if (raw.inventory && !raw.gearInventory) {
+      migrated.gearInventory = raw.inventory || [];
+    }
+    return migrated;
+  }
+  return raw;
+}
+
 function deepMergeDefaults(defaults, target) {
   const result = { ...target };
   for (const key of Object.keys(defaults)) {
     if (result[key] === undefined || result[key] === null) {
       result[key] = defaults[key];
     } else if (
+      defaults[key] !== null &&
       typeof defaults[key] === 'object' &&
       !Array.isArray(defaults[key]) &&
+      result[key] !== null &&
       typeof result[key] === 'object' &&
       !Array.isArray(result[key])
     ) {
@@ -64,21 +87,31 @@ function deepMergeDefaults(defaults, target) {
 
 function loadSave() {
   const raw = loadRaw();
-  if (!raw) return { ...DEFAULT_SAVE };
-  return deepMergeDefaults(DEFAULT_SAVE, raw);
+  if (!raw) return {
+    ...DEFAULT_SAVE,
+    gearLoadout: getInitialLoadout(),
+  };
+  const migrated = migrate(raw) || raw;
+  const merged = deepMergeDefaults(DEFAULT_SAVE, migrated);
+  if (!merged.gearLoadout) merged.gearLoadout = getInitialLoadout();
+  return merged;
+}
+
+function persistSave(data) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('[usePersistence] write failed:', e.message);
+  }
 }
 
 export function usePersistence() {
   const [save, setSave] = useState(() => loadSave());
   const saveRef = useRef(save);
 
-  useEffect(() => {
-    saveRef.current = save;
-  }, [save]);
+  useEffect(() => { saveRef.current = save; }, [save]);
 
-  const getBestScore = useCallback((mode) => {
-    return saveRef.current.bestScores[mode] ?? 0;
-  }, []);
+  const getBestScore = useCallback((mode) => saveRef.current.bestScores[mode] ?? 0, []);
 
   const forceManualSync = useCallback((updatedSave) => {
     setSave(updatedSave);
@@ -89,31 +122,37 @@ export function usePersistence() {
     setSave(prev => {
       const currentBest = prev.bestScores[mode] ?? 0;
       if (score <= currentBest) return prev;
+      const next = { ...prev, bestScores: { ...prev.bestScores, [mode]: score } };
+      persistSave(next);
+      return next;
+    });
+  }, []);
 
+  // Called when player picks up gear mid-run — adds to gearInventory
+  const addRunLootToProfile = useCallback((lootItems) => {
+    if (!lootItems || lootItems.length === 0) return;
+    setSave(prev => {
       const next = {
         ...prev,
-        bestScores: {
-          ...prev.bestScores,
-          [mode]: score,
-        },
+        gearInventory: [...(prev.gearInventory || []), ...lootItems],
       };
-
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(next));
-      } catch (e) {
-        console.warn('[usePersistence] Storage execution write blocked:', e.message);
-      }
+      persistSave(next);
       return next;
     });
   }, []);
 
   const resetSave = useCallback(() => {
-    const fresh = { ...DEFAULT_SAVE };
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(fresh));
-    } catch(e){}
+    const fresh = { ...DEFAULT_SAVE, gearLoadout: getInitialLoadout() };
+    persistSave(fresh);
     setSave(fresh);
   }, []);
 
-  return { save, getBestScore, recordRunResult, resetSave, forceManualSync };
+  return {
+    save,
+    getBestScore,
+    recordRunResult,
+    addRunLootToProfile,
+    forceManualSync,
+    resetSave,
+  };
 }

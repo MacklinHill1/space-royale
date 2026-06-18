@@ -1,86 +1,83 @@
-// src/hooks/useEquipment.js
+// hooks/useEquipment.js
 "use client";
 
 import { useMemo, useCallback } from 'react';
-import { MAX_INVENTORY_SLOTS, sortItemsByRarity } from '../systems/InventorySystem';
-import { getInitialEquipmentSlots, isItemValidForSlot } from '../systems/EquipmentSystem';
-import { EQUIP_SLOTS } from '../constants/EquipmentData';
+import { getInitialLoadout, RARITY_SALVAGE_VALUE, CATEGORY_SLOT_MAP } from '../constants/EquipmentData.js';
+import { isItemValidForSlot, sortItemsByRarity } from '../systems/EquipmentSystem.js';
+
+export const MAX_GEAR_SLOTS = 120;
 
 export function useEquipment(profile, onProfileUpdate) {
-  // 1. Strictly read incoming properties. Zero auto-correct side-effects.
-  const inventory = useMemo(() => profile?.inventory || [], [profile?.inventory]);
-  const equipped = useMemo(() => profile?.equippedItems || getInitialEquipmentSlots(), [profile?.equippedItems]);
+  const gearInventory = useMemo(() => profile?.gearInventory || [], [profile?.gearInventory]);
+  const gearLoadout   = useMemo(() => profile?.gearLoadout   || getInitialLoadout(), [profile?.gearLoadout]);
 
-  // 2. Wrap parent dispatches safely so they execute completely outside the render timeline
-  const updateProfileData = useCallback((nextInventory, nextEquipped) => {
+  const _commit = useCallback((nextInventory, nextLoadout, extraFields = {}) => {
     if (!onProfileUpdate || !profile) return;
-    
-    // Pushing the execution state change to the next event loop frame
     setTimeout(() => {
       onProfileUpdate({
         ...profile,
-        inventory: nextInventory,
-        equippedItems: nextEquipped
+        gearInventory: nextInventory,
+        gearLoadout:   nextLoadout,
+        ...extraFields,
       });
     }, 0);
   }, [profile, onProfileUpdate]);
 
-  const equipItem = useCallback((itemInstance, targetSlot) => {
-    if (!itemInstance || !targetSlot) return;
-    if (!isItemValidForSlot(itemInstance, targetSlot)) return;
+  // ── Equip ────────────────────────────────────────────────────────────────
+  const equipItem = useCallback((item, slotKey) => {
+    if (!item || !slotKey) return;
+    if (!isItemValidForSlot(item, slotKey)) return;
 
-    const currentEquippedAtSlot = equipped[targetSlot];
-    let nextInventory = inventory.filter(item => item.instanceId !== itemInstance.instanceId);
-    
-    if (currentEquippedAtSlot) {
-      nextInventory.push(currentEquippedAtSlot);
-    }
+    const displaced = gearLoadout[slotKey];
+    const nextInventory = [
+      ...gearInventory.filter(i => i.instanceId !== item.instanceId),
+      ...(displaced ? [displaced] : []),
+    ];
+    const nextLoadout = { ...gearLoadout, [slotKey]: item };
+    _commit(nextInventory, nextLoadout);
+  }, [gearInventory, gearLoadout, _commit]);
 
-    const nextEquipped = {
-      ...equipped,
-      [targetSlot]: itemInstance
-    };
+  // ── Unequip ──────────────────────────────────────────────────────────────
+  const unequipItem = useCallback((slotKey) => {
+    const item = gearLoadout[slotKey];
+    if (!item) return;
+    const nextInventory = [...gearInventory, item];
+    const nextLoadout   = { ...gearLoadout, [slotKey]: null };
+    _commit(nextInventory, nextLoadout);
+  }, [gearInventory, gearLoadout, _commit]);
 
-    updateProfileData(nextInventory, nextEquipped);
-  }, [inventory, equipped, updateProfileData]);
-
-  const unequipItem = useCallback((slotName) => {
-    const itemInstance = equipped[slotName];
-    if (!itemInstance) return;
-    if (inventory.length >= MAX_INVENTORY_SLOTS) return;
-
-    const nextInventory = [...inventory, itemInstance];
-    const nextEquipped = {
-      ...equipped,
-      [slotName]: null
-    };
-
-    updateProfileData(nextInventory, nextEquipped);
-  }, [inventory, equipped, updateProfileData]);
-
-  const salvageItem = useCallback((itemInstance) => {
-    if (!itemInstance) return;
-    const nextInventory = inventory.filter(item => item.instanceId !== itemInstance.instanceId);
-    
+  // ── Salvage ──────────────────────────────────────────────────────────────
+  const salvageItem = useCallback((item) => {
+    if (!item) return;
+    const nextInventory = gearInventory.filter(i => i.instanceId !== item.instanceId);
+    const salvageGold   = item.value || RARITY_SALVAGE_VALUE[item.rarity] || 50;
     setTimeout(() => {
       if (onProfileUpdate && profile) {
         onProfileUpdate({
           ...profile,
-          inventory: nextInventory,
-          gold: (profile.gold || 0) + 100
+          gearInventory: nextInventory,
+          gold: (profile.gold || 0) + salvageGold,
         });
       }
     }, 0);
-  }, [inventory, profile, onProfileUpdate]);
+  }, [gearInventory, profile, onProfileUpdate]);
 
-  const sortedInventory = useMemo(() => sortItemsByRarity(inventory), [inventory]);
+  // ── Add run loot ─────────────────────────────────────────────────────────
+  const addLootToHangar = useCallback((items) => {
+    if (!items || items.length === 0) return;
+    const nextInventory = [...gearInventory, ...items];
+    _commit(nextInventory, gearLoadout);
+  }, [gearInventory, gearLoadout, _commit]);
+
+  const sortedInventory = useMemo(() => sortItemsByRarity(gearInventory), [gearInventory]);
 
   return {
-    inventory: sortedInventory,
-    equipped,
+    gearInventory: sortedInventory,
+    gearLoadout,
     equipItem,
     unequipItem,
     salvageItem,
-    isInventoryFull: inventory.length >= MAX_INVENTORY_SLOTS
+    addLootToHangar,
+    isHangarFull: gearInventory.length >= MAX_GEAR_SLOTS,
   };
 }
