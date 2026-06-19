@@ -2,9 +2,10 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getInitialLoadout } from '../constants/EquipmentData.js';
+import { getInitialAbilityLoadout } from '../constants/AbilityData.js';
 
 const SAVE_KEY = 'srr_save';
-const CURRENT_SAVE_VERSION = 2;
+const CURRENT_SAVE_VERSION = 3;
 
 const DEFAULT_SAVE = {
   version: CURRENT_SAVE_VERSION,
@@ -19,15 +20,11 @@ const DEFAULT_SAVE = {
   // ── GEAR HANGAR (equipment only) ──────────────────────────
   gearInventory: [],      // Item[] — all collected gear pieces
   gearLoadout:   null,    // populated with getInitialLoadout() on first access
+  // ── ABILITY VAULT ─────────────────────────────────────────
+  abilityInventory: [],   // AbilityInstance[] — all collected abilities
+  abilityLoadout:   null, // populated with getInitialAbilityLoadout() on first access
   // ── INVENTORY (chests, boosts, consumables, etc.) ─────────
   inventory: [],
-  // ── ABILITIES ──────────────────────────────────────────────
-  unlockedAbilities: [],
-  equippedAbilities: {
-    active1: null, active2: null,
-    passive1: null, passive2: null,
-    weapon: null, drone: null,
-  },
 };
 
 function loadRaw() {
@@ -43,27 +40,38 @@ function loadRaw() {
 
 function migrate(raw) {
   if (!raw) return null;
+  let data = { ...raw };
+
   // v1 → v2: rename equippedItems → gearLoadout, add gearInventory
-  if (!raw.version || raw.version < 2) {
-    const migrated = { ...raw, version: 2 };
-    if (raw.equippedItems && !raw.gearLoadout) {
-      // Map old 5-slot layout to new 9-slot
-      const old = raw.equippedItems;
-      migrated.gearLoadout = {
+  if (!data.version || data.version < 2) {
+    data.version = 2;
+    if (data.equippedItems && !data.gearLoadout) {
+      const old = data.equippedItems;
+      data.gearLoadout = {
         ...getInitialLoadout(),
         weapon:   old.weapon   || null,
         armor:    old.armor    || null,
         module_a: old.mod1     || null,
         module_b: old.mod2     || null,
       };
-      delete migrated.equippedItems;
+      delete data.equippedItems;
     }
-    if (raw.inventory && !raw.gearInventory) {
-      migrated.gearInventory = raw.inventory || [];
+    if (data.inventory && !data.gearInventory) {
+      data.gearInventory = data.inventory || [];
     }
-    return migrated;
   }
-  return raw;
+
+  // v2 → v3: add abilityInventory + abilityLoadout, drop old ability fields
+  if (data.version < 3) {
+    data.version = 3;
+    if (!data.abilityInventory) data.abilityInventory = [];
+    if (!data.abilityLoadout)   data.abilityLoadout   = getInitialAbilityLoadout();
+    // Migrate old unlockedAbilities/equippedAbilities if they existed
+    if (data.unlockedAbilities) delete data.unlockedAbilities;
+    if (data.equippedAbilities) delete data.equippedAbilities;
+  }
+
+  return data;
 }
 
 function deepMergeDefaults(defaults, target) {
@@ -89,11 +97,13 @@ function loadSave() {
   const raw = loadRaw();
   if (!raw) return {
     ...DEFAULT_SAVE,
-    gearLoadout: getInitialLoadout(),
+    gearLoadout:    getInitialLoadout(),
+    abilityLoadout: getInitialAbilityLoadout(),
   };
   const migrated = migrate(raw) || raw;
   const merged = deepMergeDefaults(DEFAULT_SAVE, migrated);
-  if (!merged.gearLoadout) merged.gearLoadout = getInitialLoadout();
+  if (!merged.gearLoadout)    merged.gearLoadout    = getInitialLoadout();
+  if (!merged.abilityLoadout) merged.abilityLoadout = getInitialAbilityLoadout();
   return merged;
 }
 
@@ -141,8 +151,25 @@ export function usePersistence() {
     });
   }, []);
 
+  // Called when player picks up an ability mid-run
+  const addRunAbilitiesToProfile = useCallback((abilityItems) => {
+    if (!abilityItems || abilityItems.length === 0) return;
+    setSave(prev => {
+      const next = {
+        ...prev,
+        abilityInventory: [...(prev.abilityInventory || []), ...abilityItems],
+      };
+      persistSave(next);
+      return next;
+    });
+  }, []);
+
   const resetSave = useCallback(() => {
-    const fresh = { ...DEFAULT_SAVE, gearLoadout: getInitialLoadout() };
+    const fresh = {
+      ...DEFAULT_SAVE,
+      gearLoadout:    getInitialLoadout(),
+      abilityLoadout: getInitialAbilityLoadout(),
+    };
     persistSave(fresh);
     setSave(fresh);
   }, []);
@@ -152,6 +179,7 @@ export function usePersistence() {
     getBestScore,
     recordRunResult,
     addRunLootToProfile,
+    addRunAbilitiesToProfile,
     forceManualSync,
     resetSave,
   };

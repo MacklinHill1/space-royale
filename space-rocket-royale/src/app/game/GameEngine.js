@@ -10,6 +10,25 @@ import {
   renderEquipmentDrops,
 } from '../../../systems/EquipmentDropSystem.js';
 import { RARITY_COLORS, RARITY_BEAM_HEIGHT, BOSS_DROP_TABLES } from '../../../constants/EquipmentData.js';
+import {
+  makeAbilityDrop,
+  resetAbilityDrop,
+  spawnBossAbilityDrops,
+  spawnChestAbilityDrop,
+  updateAbilityDrops,
+  renderAbilityDrops,
+} from '../../../systems/AbilityDropSystem.js';
+import {
+  applyPassiveAbilities,
+  updatePassiveAbilities,
+  updateActiveEffects,
+  activateAbility,
+  renderActiveEffects,
+  godMachineShoot,
+  checkEntropyCollapse,
+  voidEchoShot,
+  getCooldownMult,
+} from '../../../systems/AbilitySystem.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MATH UTILITIES
@@ -69,13 +88,21 @@ export class AudioEngine {
   constructor() {
     this._ctx = null;
     this._muted = false;
+    this._volume = (() => {
+      try { return parseFloat(localStorage.getItem('srr_volume') ?? '0.5'); } catch { return 0.5; }
+    })();
+  }
+  setVolume(v) {
+    this._volume = Math.max(0, Math.min(1, v));
+    this._muted = this._volume === 0;
   }
   _init() {
     if (this._ctx) return;
     try { this._ctx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){}
   }
   _tone(freq, type, dur, vol=0.3, delay=0) {
-    if (this._muted || !this._ctx) return;
+    if (this._muted || this._volume === 0 || !this._ctx) return;
+    vol = vol * this._volume;
     try {
       const o = this._ctx.createOscillator();
       const g = this._ctx.createGain();
@@ -229,7 +256,10 @@ export class GameEngine {
     this.loot      = new Pool(makeLoot,    l=>{l.active=false;l.attracted=false;}, 150);
     this.droneParts= new Pool(makeDrone,   d=>{d.active=false;}, 8);
     this.chests    = new Pool(makeChest,   c=>{c.active=false;c.opened=false;}, 20);
-    this.equipDrops= new Pool(makeEquipmentDrop, resetEquipmentDrop, 30);
+    this.equipDrops   = new Pool(makeEquipmentDrop, resetEquipmentDrop, 30);
+    this.abilityDrops = new Pool(makeAbilityDrop,   resetAbilityDrop,   20);
+    this.abilityEffects = [];
+    this.abilityLoadout = null;
 
     this.player       = null;
     this.enemies      = [];
@@ -300,7 +330,13 @@ export class GameEngine {
       if (down && key==='KeyQ') this._useBomb();
       if (down && key==='KeyF') this._useMagnet();
       if (down && (key==='Space'||key==='ShiftLeft')) this._dash();
-      if (down && key==='Escape' && this.shopOpen) this._toggleShop();
+      if (down && key==='KeyZ') this._activateAbilitySlot('active1');
+      if (down && key==='KeyX') this._activateAbilitySlot('active2');
+      if (down && key==='KeyR') this._activateAbilitySlot('ultimate');
+      if (down && key==='Escape') {
+        if (this.shopOpen) this._toggleShop();
+        else if (!this.gameOver) this._togglePause();
+      }
     };
     this._onMouseMove = (e) => {
       const rect = this.canvas.getBoundingClientRect();
@@ -401,6 +437,7 @@ export class GameEngine {
     this.bossAttackTimer = 0;
     this.bossesKilledThisRun = 0;
     this.runLootCollected = [];
+    this.runAbilityLoot   = [];
     this.runLootCount = 0;
     this.secretRunStats = { uniqueBossesKilled: new Set(), bossKilledAtLowHP: false, lootCollected: 0 };
     this.activeEvent  = null;
@@ -453,6 +490,7 @@ export class GameEngine {
     this._updateLoot(dt);
     this._updateChests(dt);
     this._updateEquipmentDrops(dt);
+    this._updateAbilityDrops(dt);
     this._updateAbilities(dt);
     this._updateParticles(dt);
     this._updatePods(dt);
@@ -639,7 +677,7 @@ export class GameEngine {
     if (!e.active || !this.player) return;
     e.active = false;
     this.player.kills++;
-    this.player.killCount++;
+    this.player.killCount = (this.player.killCount || 0) + 1;
     const xpGain = Math.floor(e.xpDrop * this.player.xpMult);
     const goldGain = Math.floor(e.goldDrop * this.player.goldMult);
     this._spawnLoot(e.pos, xpGain, goldGain);
@@ -757,16 +795,26 @@ export class GameEngine {
     this._spawnLoot(bossPos, this.bossData.xpDrop, this.bossData.goldDrop);
     this._spawnChest(bossPos, this.bossData.chestTier);
 
-    // Spawn equipment drops via new system
+    // Spawn equipment drops
     const items = spawnBossEquipmentDrops(
       this.equipDrops, bossPos, bossName, this.wave,
       (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
     );
-    // Notify UI about drops
     if (items.length > 0) {
       this.onStateChange({ bossDropItems: items, bossDropBossName: bossName });
       setTimeout(() => this.onStateChange({ bossDropItems: null }), 4000);
     }
+
+    // Spawn ability drops (always at least 1 per boss kill)
+    const hasBossHunter = !!(this.abilityLoadout?.passive1?.effectKey === 'BOSS_HUNTER' ||
+                              this.abilityLoadout?.passive2?.effectKey === 'BOSS_HUNTER' ||
+                              this.abilityLoadout?.passive3?.effectKey === 'BOSS_HUNTER');
+    spawnBossAbilityDrops(
+      this.abilityDrops, bossPos, bossName, this.wave, hasBossHunter,
+      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+    );
+
+    if (this.player) this.player._cosmicBossKills = (this.player._cosmicBossKills || 0) + 1;
 
     this._spawnParticles(bossPos, this.bossData.accent, 60, 7, 80);
     this._spawnParticles(bossPos, '#fff', 30, 5, 50);
@@ -820,7 +868,8 @@ export class GameEngine {
     if (this.player) this.player.dead = true;
     this.gameOver = true;
     this.running  = false;
-    const loot = [...this.runLootCollected];
+    const loot        = [...(this.runLootCollected || [])];
+    const abilityLoot = [...(this.runAbilityLoot   || [])];
     setTimeout(() => {
       this.onStateChange({
         gameOver: true,
@@ -833,6 +882,7 @@ export class GameEngine {
         finalGold:         this.player ? Math.floor(this.player.gold) : 0,
         finalXP:           this.player ? Math.floor(this.player.xp)   : 0,
         runLoot:           loot,
+        runAbilityLoot:    abilityLoot,
       });
     }, 500);
   }
@@ -951,46 +1001,131 @@ export class GameEngine {
   _updateAbilities(dt) {
     const p = this.player;
     if (!p) return;
-    
-    Object.keys(p.abilityCooldowns).forEach(key => {
-      if (p.abilityCooldowns[key] > 0) {
-        p.abilityCooldowns[key] = Math.max(0, p.abilityCooldowns[key] - dt * 0.016667);
-      }
-    });
-    
-    if (p.equippedAbilities.passive1 === 'toxic_trail' || p.equippedAbilities.passive2 === 'toxic_trail') {
-      if (V.len(p.vel) > 1 && this.tick % 8 === 0) {
-        this.toxicClouds.push({
-          pos: V.copy(p.pos),
-          radius: 40,
-          life: 480,
-          maxLife: 480,
-        });
-      }
+
+    // Tick all ability cooldowns (in seconds)
+    if (p.abilityCooldowns) {
+      Object.keys(p.abilityCooldowns).forEach(id => {
+        if (p.abilityCooldowns[id] > 0) {
+          p.abilityCooldowns[id] = Math.max(0, p.abilityCooldowns[id] - dt * 0.016667);
+        }
+      });
     }
-    
-    this.toxicClouds = this.toxicClouds.filter(cloud => {
-      cloud.life -= dt;
-      return cloud.life > 0;
+
+    // Last Signal speed boost
+    if (p._lastSignalActive) {
+      p._effectiveSpeedMult = (p.speedMult || 1) * (p._lastSignalSpeedMult || 1);
+    } else {
+      p._effectiveSpeedMult = p.speedMult || 1;
+    }
+
+    // Apply temporal slow to enemies
+    this.enemies.forEach(e => {
+      if (e._temporalSlowed) {
+        e._temporalSlowTimer = (e._temporalSlowTimer || 0) - dt;
+        if (e._temporalSlowTimer <= 0) {
+          e._temporalSlowed = false;
+          e._speedBeforeSlow = undefined;
+        }
+      }
     });
-    
+
+    // Per-frame passive processing
+    updatePassiveAbilities(p, dt, this._abilityGameContext());
+
+    // Active effect processing (UFO, Singularity, etc.)
+    updateActiveEffects(this.abilityEffects, p, dt, this._abilityGameContext());
+
+    // Scavenger drone — auto-attract all loot
+    if (p.autoScavenge && this.tick % 60 === 0) {
+      this.loot.forEach(l => { if (l.active) l.attracted = true; });
+    }
+
+    // Toxic trail (legacy support + new system)
+    const hasToxicTrail = p.abilityLoadout && Object.values(p.abilityLoadout)
+      .some(a => a && (a.effectKey === 'TOXIC_TRAIL' || a.id === 'toxic_trail'));
+    if (hasToxicTrail && V.len(p.vel) > 1 && this.tick % 8 === 0) {
+      this.toxicClouds.push({ pos: V.copy(p.pos), radius: 45, life: 480, maxLife: 480 });
+    }
+    this.toxicClouds = this.toxicClouds.filter(c => { c.life -= dt; return c.life > 0; });
     this.toxicClouds.forEach(cloud => {
       this.enemies.forEach(e => {
         if (e.active && V.dist(e.pos, cloud.pos) < cloud.radius + e.radius) {
-          e.speed = Math.min(e.speed, e.speed * 0.5);
+          // Slow + amplify damage (tracked via flag)
+          e._inToxicCloud = true;
+          if (e.speed > 0.1) e.speed *= Math.max(0.5, 1 - 0.015 * dt);
         }
       });
     });
-    
-    if (p.equippedAbilities.passive1 === 'blood_pact' || p.equippedAbilities.passive2 === 'blood_pact') {
-      const killMilestone = Math.floor(p.killCount / 50);
-      const expectedMaxHp = 100 + killMilestone;
-      if (p.maxHp < expectedMaxHp) {
-        p.maxHp = expectedMaxHp;
-        p.hp = Math.min(p.hp + 1, p.maxHp);
-        this._spawnParticles(p.pos, '#ef4444', 10, 2, 20);
-      }
+  }
+
+  _updateAbilityDrops(dt) {
+    const p = this.player;
+    if (!p) return;
+    updateAbilityDrops(
+      this.abilityDrops, p, dt,
+      (ability) => {
+        // Ability picked up
+        if (!this.runAbilityLoot) this.runAbilityLoot = [];
+        this.runAbilityLoot.push(ability);
+        this.onStateChange({ abilityPickup: ability });
+        this.audio.powerup();
+        setTimeout(() => this.onStateChange({ abilityPickup: null }), 3000);
+      },
+      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+    );
+  }
+
+  _activateAbilitySlot(slotKey) {
+    const p = this.player;
+    if (!p || this.gameOver || this.shopOpen) return;
+    const ability = p.abilityLoadout && p.abilityLoadout[slotKey];
+    if (!ability) return;
+
+    // Temporal Anchor second activation (R pressed again)
+    if (ability.effectKey === 'TEMPORAL_ANCHOR' && p._temporalAnchorState === 'recording') {
+      activateAbility(ability, p, this._abilityGameContext());
+      return;
     }
+
+    const activated = activateAbility(ability, p, this._abilityGameContext());
+    if (activated) {
+      this.onStateChange({ abilityCooldowns: { ...(p.abilityCooldowns || {}) } });
+    }
+  }
+
+  // Context object passed to AbilitySystem — dependency injection
+  _abilityGameContext() {
+    return {
+      getEnemies:      () => this.enemies.filter(e => e.active),
+      getBoss:         () => (this.boss && this.boss.active) ? this.boss : null,
+      killEnemy:       (e) => { if (e.active) this._killEnemy(e); },
+      spawnParticles:  (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life),
+      screenShake:     (amt) => { this.shake = Math.max(this.shake, amt); },
+      addActiveEffect: (fx) => { this.abilityEffects.push(fx); },
+      triggerSupernova:(pos, dmg) => {
+        this._spawnParticles(pos, '#fbbf24', 60, 10, 70);
+        this._spawnParticles(pos, '#fff', 30, 6, 50);
+        this.shake = Math.max(this.shake, 20);
+        this.enemies.forEach(e => {
+          if (e.active) { e.hp -= dmg; e.flash = 15; if (e.hp <= 0) this._killEnemy(e); }
+        });
+        if (this.boss && this.boss.active) { this.boss.hp -= dmg * 0.15; this.boss.flash = 12; }
+      },
+    };
+  }
+
+  _killEnemy(e) {
+    if (!e.active) return;
+    e.active = false;
+    const p = this.player;
+    if (p) {
+      p.score  += e.xpDrop || 10;
+      p.kills  = (p.kills  || 0) + 1;
+      p.killCount = (p.killCount || 0) + 1;
+    }
+    this._spawnLoot(e.pos, e.xpDrop || 10, e.goldDrop || 5);
+    this._spawnParticles(e.pos, e.color || '#ef4444', 8, 2, 18);
+    this.audio.explosion();
   }
 
   _updateParticles(dt) {
@@ -1083,6 +1218,11 @@ export class GameEngine {
   }
 
   _toggleShop() { this.shopOpen = !this.shopOpen; this.onStateChange({shopOpen:this.shopOpen}); }
+  _togglePause() {
+    this.paused = !this.paused;
+    this.onStateChange({ paused: this.paused });
+  }
+  resume() { if (this.paused) this._togglePause(); }
   applyUpgrade(upgradeId) {
     const upgrade = UPGRADES.find(u=>u.id===upgradeId); if (!upgrade||!this.player||this.player.gold < upgrade.cost) return;
     this.player.gold -= upgrade.cost; upgrade.apply(this.player); this.purchasedItems.push(upgradeId); this.audio.purchase(); this._syncUI();
@@ -1091,7 +1231,12 @@ export class GameEngine {
   _syncUI() {
     if (!this.player) return;
     this.onStateChange({
-      hp: Math.max(0,this.player.hp), maxHp: this.player.maxHp, shield: this.player.shield, shieldMax: this.player.shieldMax, xp: this.player.xp, xpToNext: this.player.xpToNext, level: this.player.level, gold: Math.floor(this.player.gold), score: this.player.score, kills: this.player.kills, wave: this.wave, sessionTime: this.sessionTime, bossHp: this.boss ? this.boss.hp : 0, bossMaxHp: this.boss ? this.boss.maxHp : 0, dashReady: this.player.dashCooldown<=0, bombReady: this.player.dashCooldown<=0 && this.player.bombDmg>0, bombDmg: this.player.bombDmg, drones: this.player.drones, purchasedItems: this.purchasedItems, shopOpen: this.shopOpen
+      hp: Math.max(0,this.player.hp), maxHp: this.player.maxHp, shield: this.player.shield, shieldMax: this.player.shieldMax, xp: this.player.xp, xpToNext: this.player.xpToNext, level: this.player.level, gold: Math.floor(this.player.gold), score: this.player.score, kills: this.player.kills, wave: this.wave, sessionTime: this.sessionTime, bossHp: this.boss ? this.boss.hp : 0, bossMaxHp: this.boss ? this.boss.maxHp : 0, dashReady: this.player.dashCooldown<=0, bombReady: this.player.dashCooldown<=0 && this.player.bombDmg>0, bombDmg: this.player.bombDmg, drones: this.player.drones, purchasedItems: this.purchasedItems, shopOpen: this.shopOpen,
+      abilityCooldowns: this.player.abilityCooldowns || {},
+      abilityLoadout: this.player.abilityLoadout || {},
+      godMachineActive: this.player._godMachineActive || false,
+      lastSignalActive: this.player._lastSignalActive || false,
+      temporalAnchorReady: this.player._temporalAnchorState === 'recording',
     });
   }
 
@@ -1104,6 +1249,7 @@ export class GameEngine {
     this._renderLoot();
     this._renderChests();
     this._renderEquipmentDrops();
+    this._renderAbilityDrops();
     this._renderToxicClouds();
     this._renderParticles();
     this._renderBullets();
@@ -1261,6 +1407,10 @@ export class GameEngine {
 
   _renderEquipmentDrops() {
     renderEquipmentDrops(this.ctx, this.equipDrops, this.tick, this.mobilePerformanceMode);
+  }
+
+  _renderAbilityDrops() {
+    renderAbilityDrops(this.ctx, this.abilityDrops, this.tick, this.mobilePerformanceMode);
   }
 
   _renderToxicClouds() {
