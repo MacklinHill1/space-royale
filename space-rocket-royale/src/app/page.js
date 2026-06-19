@@ -4,10 +4,15 @@ import React, { useRef, useEffect, useState, useCallback, Suspense } from 'react
 import { GameEngine, AudioEngine, UPGRADES, RARITY_COLOR, RARITY_GLOW } from './game/GameEngine';
 import GearHangarScreen, { LootSummary, PickupNotification } from '../../ui/screens/GearHangarScreen';
 import AbilityScreen, { AbilityPickupNotification, AbilityLootSummary } from '../../ui/screens/AbilityScreen';
+import { ModeSelectScreen } from '../../ui/screens/ModeSelectScreen';
+import { MetaHubScreen } from '../../ui/screens/MetaHubScreen';
+import { ChestOpenScreen } from '../../ui/screens/ChestOpenScreen';
 import { usePersistence } from '../../hooks/usePersistence';
 import { useAbilities } from '../../hooks/useAbilities';
 import { RARITY_COLORS } from '../../constants/EquipmentData';
 import { ABILITY_RARITY_COLORS } from '../../constants/AbilityData';
+import { computeShopStats } from '../../systems/ShopSystem';
+import { computeAllMetaStats } from '../../systems/MetaProgression';
 
 function HomepageSeoContent() {
   return (
@@ -224,14 +229,8 @@ function ShareButton() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // UI COMPONENT SUB-MODULES
 // ═══════════════════════════════════════════════════════════════════════════════
-function ShopModal({ engine, gold, purchasedItems }) {
-  const [stock] = useState(() => {
-    const all = [...UPGRADES];
-    const shuffled = all.sort(() => Math.random() - 0.5);
-    const counts = {};
-    purchasedItems.forEach(id => { counts[id] = (counts[id] || 0) + 1; });
-    return shuffled.filter(u => (counts[u.id] || 0) < 3).slice(0, 5);
-  });
+function ShopModal({ engine, gold, purchasedItems, stock, timer }) {
+  const MAX_PER_ITEM = 5;
 
   return (
     <div style={{ position:'absolute',inset:0,background:'rgba(3,7,18,0.92)',backdropFilter:'blur(12px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:50,fontFamily:'"Courier New",monospace' }}>
@@ -239,38 +238,80 @@ function ShopModal({ engine, gold, purchasedItems }) {
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px'}}>
           <div>
             <div style={{fontSize:'1.5rem',fontWeight:'700',color:'#c4b5fd',letterSpacing:'0.1em'}}>⚙ UPGRADE SHOP</div>
-            <div style={{color:'#64748b',fontSize:'0.8rem',marginTop:'2px'}}>Press E or ESC to close</div>
+            <div style={{color:'#64748b',fontSize:'0.8rem',marginTop:'2px'}}>Press E or ESC to close • Refreshes in {timer}s</div>
           </div>
           <div style={{ background:'rgba(251,191,36,0.15)',border:'1px solid rgba(251,191,36,0.3)',borderRadius:'10px',padding:'8px 16px',color:'#fbbf24',fontWeight:'700',fontSize:'1.1rem' }}>🪙 {Math.floor(gold)}</div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px'}}>
           {stock.map(item => {
+            const counts = {};
+            purchasedItems.forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+            const owned = counts[item.id] || 0;
+            const maxed = owned >= MAX_PER_ITEM;
             const canAfford = gold >= item.cost;
+            const canBuy = canAfford && !maxed;
             return (
-              <button key={item.id} onClick={() => { if(canAfford){engine.applyUpgrade(item.id);} }}
+              <button key={item.id} onClick={() => { if(canBuy) engine.applyUpgrade(item.id); }}
                 style={{
-                  background:canAfford ? `radial-gradient(circle at 30% 30%,${RARITY_GLOW[item.rarity]},rgba(15,23,42,0.9))` : 'rgba(15,23,42,0.5)',
-                  border:`1px solid ${canAfford ? RARITY_COLOR[item.rarity] : 'rgba(55,65,81,0.5)'}`,
-                  borderRadius:'12px',padding:'16px',textAlign:'left',cursor:canAfford ? 'pointer' : 'not-allowed',opacity:canAfford ? 1 : 0.5,transition:'transform 0.1s',boxShadow:canAfford ? `0 0 15px ${RARITY_GLOW[item.rarity]}` : 'none'
+                  background: maxed ? 'rgba(15,23,42,0.3)' : canAfford ? `radial-gradient(circle at 30% 30%,${RARITY_GLOW[item.rarity]},rgba(15,23,42,0.9))` : 'rgba(15,23,42,0.5)',
+                  border:`1px solid ${maxed ? '#374151' : canAfford ? RARITY_COLOR[item.rarity] : 'rgba(55,65,81,0.5)'}`,
+                  borderRadius:'12px',padding:'16px',textAlign:'left',cursor:canBuy ? 'pointer' : 'not-allowed',opacity:canBuy ? 1 : 0.5,transition:'transform 0.1s',boxShadow:canBuy ? `0 0 15px ${RARITY_GLOW[item.rarity]}` : 'none'
                 }}
               >
-                <div style={{fontSize:'1.8rem',marginBottom:'6px'}}>{item.icon}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'6px'}}>
+                  <div style={{fontSize:'1.8rem'}}>{item.icon}</div>
+                  <div style={{fontSize:'0.65rem',background:'rgba(0,0,0,0.4)',borderRadius:'4px',padding:'2px 5px',color: maxed ? '#ef4444' : '#64748b'}}>
+                    {owned}/{MAX_PER_ITEM}{maxed ? ' MAX' : ''}
+                  </div>
+                </div>
                 <div style={{color:RARITY_COLOR[item.rarity],fontSize:'0.65rem',letterSpacing:'0.15em',textTransform:'uppercase',marginBottom:'4px'}}>{item.rarity}</div>
                 <div style={{color:'#e2e8f0',fontWeight:'700',fontSize:'0.9rem',marginBottom:'6px'}}>{item.name}</div>
                 <div style={{color:'#94a3b8',fontSize:'0.75rem',lineHeight:'1.4',marginBottom:'10px'}}>{item.desc}</div>
-                <div style={{color:canAfford ? '#fbbf24' : '#6b7280',fontWeight:'700',fontSize:'0.9rem',display:'flex',alignItems:'center',gap:'4px'}}>🪙 {item.cost}</div>
+                {maxed
+                  ? <div style={{color:'#ef4444',fontWeight:'700',fontSize:'0.8rem'}}>MAXED OUT</div>
+                  : <div style={{color:canAfford ? '#fbbf24' : '#6b7280',fontWeight:'700',fontSize:'0.9rem',display:'flex',alignItems:'center',gap:'4px'}}>🪙 {item.cost}</div>
+                }
               </button>
             );
           })}
         </div>
-        <div style={{marginTop:'20px',textAlign:'center',color:'#374151',fontSize:'0.75rem'}}>Game paused while shop is open • New stock each visit</div>
+        <div style={{marginTop:'20px',textAlign:'center',color:'#374151',fontSize:'0.75rem'}}>Game paused while shop is open • Max 5 per upgrade</div>
       </div>
     </div>
   );
 }
 
+function ActiveUpgradesPanel({ purchasedItems, onClose }) {
+  const counts = {};
+  (purchasedItems || []).forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+  const ownedUpgrades = UPGRADES.filter(u => counts[u.id] > 0);
+  return (
+    <div style={{ position:'absolute', bottom:80, left:'50%', transform:'translateX(-50%)', background:'rgba(3,7,18,0.95)', border:'1px solid rgba(139,92,246,0.4)', borderRadius:16, padding:16, maxWidth:520, width:'90vw', zIndex:60, fontFamily:'"Courier New",monospace', boxShadow:'0 0 40px rgba(139,92,246,0.2)' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <div style={{ color:'#c4b5fd', fontWeight:700, fontSize:13, letterSpacing:2 }}>📦 ACTIVE UPGRADES</div>
+        <button onClick={onClose} style={{ background:'none', border:'none', color:'#64748b', cursor:'pointer', fontSize:16 }}>✕</button>
+      </div>
+      {ownedUpgrades.length === 0
+        ? <div style={{ color:'#475569', fontSize:11 }}>No upgrades purchased yet.</div>
+        : <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {ownedUpgrades.map(u => (
+              <div key={u.id} style={{ background:`rgba(${RARITY_GLOW[u.rarity] || '139,92,246'},0.15)`, border:`1px solid ${RARITY_COLOR[u.rarity] || '#7c3aed'}`, borderRadius:8, padding:'6px 10px', display:'flex', gap:6, alignItems:'center' }}>
+                <span style={{ fontSize:16 }}>{u.icon}</span>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color: RARITY_COLOR[u.rarity] || '#c4b5fd' }}>{u.name}</div>
+                  <div style={{ fontSize:9, color:'#64748b' }}>{u.desc} {counts[u.id] > 1 ? <span style={{color:'#fbbf24'}}>×{counts[u.id]}</span> : null}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+      }
+    </div>
+  );
+}
+
 function HUD({ state, engine }) {
-  const { hp,maxHp,shield,shieldMax,xp,xpToNext,level,gold,score,kills,wave,sessionTime,bossHp,bossMaxHp,bossName,dashReady,bombReady,bombDmg,drones,worldEvent } = state;
+  const { hp,maxHp,shield,shieldMax,xp,xpToNext,level,gold,score,kills,wave,sessionTime,bossHp,bossMaxHp,bossName,dashReady,bombReady,bombDmg,drones,worldEvent,purchasedItems } = state;
+  const [showUpgrades, setShowUpgrades] = useState(false);
   const barW = (val,max) => `${Math.max(0,Math.min(100,(val/Math.max(1,max))*100))}%`;
   return (
     <div style={{position:'absolute',inset:0,pointerEvents:'none',fontFamily:'"Courier New",monospace',userSelect:'none'}}>
@@ -324,7 +365,11 @@ function HUD({ state, engine }) {
         <button onClick={() => engine._toggleShop()} style={{ background:'rgba(15,23,42,0.9)',border:'1px solid rgba(139,92,246,0.5)',borderRadius:'10px',padding:'0 12px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#c4b5fd',cursor:'pointer' }}>
           <span>🛒</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>E</span>
         </button>
+        <button onClick={() => setShowUpgrades(v => !v)} style={{ background:'rgba(15,23,42,0.9)',border:`1px solid ${showUpgrades ? 'rgba(251,191,36,0.6)' : 'rgba(139,92,246,0.5)'}`,borderRadius:'10px',padding:'0 12px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#fbbf24',cursor:'pointer' }}>
+          <span>📦</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>{(purchasedItems||[]).length}</span>
+        </button>
       </div>
+      {showUpgrades && <ActiveUpgradesPanel purchasedItems={purchasedItems} onClose={() => setShowUpgrades(false)} />}
       {bossHp > 0 && bossName && (
         <div style={{position:'absolute',bottom:90,left:'50%',transform:'translateX(-50%)',width:'400px',maxWidth:'80vw'}}>
           <div style={{textAlign:'center',marginBottom:'6px',color:'#f87171',fontSize:'0.85rem',fontWeight:'700'}}>⚠ {bossName}</div>
@@ -516,10 +561,48 @@ function GameOverScreen({ state, onRestart, onMenu }) {
   );
 }
 
+function PostGameSummary({ data, onClose }) {
+  const { finalScore, finalKills, finalLevel, finalTime, finalWave, finalBossesKilled, finalRubies, finalMode, runLootCount, abilityLootCount } = data || {};
+  const mins = Math.floor((finalTime || 0) / 60);
+  const secs = String(Math.floor((finalTime || 0) % 60)).padStart(2, '0');
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(3,7,18,0.92)', backdropFilter:'blur(12px)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'"Courier New",monospace' }}>
+      <div style={{ background:'linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,10,60,0.98))', border:'1px solid rgba(139,92,246,0.4)', borderRadius:20, padding:36, maxWidth:480, width:'90%', textAlign:'center', boxShadow:'0 0 60px rgba(139,92,246,0.2)' }}>
+        <div style={{ fontSize:11, letterSpacing:4, color:'#64748b', marginBottom:8 }}>RUN COMPLETE</div>
+        <div style={{ fontSize:28, fontWeight:900, color:'#c4b5fd', marginBottom:4 }}>{(finalScore||0).toLocaleString()}</div>
+        <div style={{ fontSize:11, color:'#475569', marginBottom:24, letterSpacing:2 }}>SCORE</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:24 }}>
+          {[
+            ['KILLS', finalKills || 0],
+            ['LEVEL', finalLevel || 1],
+            ['WAVE',  finalWave  || 1],
+            ['BOSSES', finalBossesKilled || 0],
+            ['TIME',  `${mins}:${secs}`],
+            ['RUBIES', `💎 ${finalRubies || 0}`],
+          ].map(([label, val]) => (
+            <div key={label} style={{ background:'rgba(0,0,0,0.4)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'10px 6px' }}>
+              <div style={{ fontSize:9, color:'#64748b', letterSpacing:1, marginBottom:4 }}>{label}</div>
+              <div style={{ fontSize:16, fontWeight:700, color:'#e2e8f0' }}>{val}</div>
+            </div>
+          ))}
+        </div>
+        {(runLootCount > 0 || abilityLootCount > 0) && (
+          <div style={{ fontSize:11, color:'#7c3aed', marginBottom:16 }}>
+            {runLootCount > 0 && `⚔️ ${runLootCount} gear `}{abilityLootCount > 0 && `⚡ ${abilityLootCount} abilities`} added to inventory
+          </div>
+        )}
+        <button onClick={onClose} style={{ background:'linear-gradient(135deg,#7c3aed,#4f46e5)', border:'none', borderRadius:12, padding:'12px 40px', color:'#fff', fontWeight:900, fontSize:13, letterSpacing:3, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 0 20px rgba(124,58,237,0.4)' }}>
+          CONTINUE
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LevelUpFlash({ level }) { return <div style={{ position:'absolute',top:'30%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:40,color:'#fbbf24',fontWeight:'700',fontFamily:'"Courier New",monospace' }}>⭐ LEVEL UP! (Lvl {level}) ⭐</div>; }
 function BossAlert({ name }) { return <div style={{ position:'absolute',top:'20%',left:'50%',transform:'translateX(-50%)',textAlign:'center',zIndex:45,color:'#ef4444',fontWeight:'900',fontFamily:'"Courier New",monospace' }}>⚠ BOSS APPROACHING: {name?.toUpperCase()} ⚠</div>; }
 
-function PauseMenu({ engine, onMenu, audio }) {
+function PauseMenu({ engine, onMenu, onLeave, audio }) {
   const [tab, setTab] = useState('main'); // 'main' | 'settings'
   const [volume, setVolume] = useState(() => {
     try { return parseFloat(localStorage.getItem('srr_volume') ?? '0.5'); } catch { return 0.5; }
@@ -571,7 +654,7 @@ function PauseMenu({ engine, onMenu, audio }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button style={btnStyle('#7c3aed')} onClick={() => engine?.resume()}>▶ RESUME</button>
               <button style={btnStyle('#64748b')} onClick={() => setTab('settings')}>⚙ SETTINGS</button>
-              <button style={btnStyle('#ef4444')} onClick={onMenu}>✕ LEAVE GAME</button>
+              <button style={btnStyle('#ef4444')} onClick={onLeave || onMenu}>✕ LEAVE GAME</button>
             </div>
           </>
         ) : (
@@ -601,96 +684,76 @@ function PauseMenu({ engine, onMenu, audio }) {
 }
 
 
+
 function BossDropBanner({ items, bossName }) {
   if (!items || items.length === 0) return null;
-
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '18%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        background: 'rgba(5,8,20,0.97)',
-        border: '1px solid rgba(251,191,36,0.6)',
-        borderRadius: 14,
-        padding: '14px 24px',
-        fontFamily: '"Courier New", monospace',
-        zIndex: 60,
-        textAlign: 'center',
-        boxShadow: '0 0 40px rgba(251,191,36,0.3)',
-        pointerEvents: 'none',
-        minWidth: 320,
-      }}
-    >
-      <div
-        style={{
-          color: '#fbbf24',
-          fontWeight: 900,
-          fontSize: '0.85rem',
-          marginBottom: 8,
-          letterSpacing: '0.1em',
-        }}
-      >
-        ⚔ {bossName ? bossName.toUpperCase() : 'BOSS'} DEFEATED — LOOT DROPPED
+    <div style={{
+      position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+      background:'rgba(3,7,18,0.96)', border:'1px solid rgba(251,191,36,0.4)',
+      borderRadius:'16px', padding:'24px 32px', zIndex:90,
+      fontFamily:'"Courier New",monospace', textAlign:'center',
+      boxShadow:'0 0 40px rgba(251,191,36,0.2)',
+    }}>
+      <div style={{fontSize:'0.9rem',fontWeight:'700',color:'#fbbf24',marginBottom:'12px'}}>
+        ⭐ {bossName?.toUpperCase()} DROPS
       </div>
+      <div style={{display:'flex',gap:'10px',justifyContent:'center',flexWrap:'wrap'}}>
+        {items.map((item,i) => (
+          <div key={i} style={{
+            background:'rgba(15,23,42,0.8)', border:`1px solid ${item.rarityColor||'#64748b'}`,
+            borderRadius:'10px', padding:'10px 14px', fontSize:'0.75rem', color:'#e2e8f0',
+          }}>
+            <div style={{color:item.rarityColor||'#64748b',fontSize:'0.6rem',letterSpacing:'0.1em'}}>{item.rarity?.toUpperCase()}</div>
+            <div style={{fontWeight:'700',marginTop:'2px'}}>{item.name}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-      <div
-        style={{
-          display: 'flex',
-          gap: 10,
-          justifyContent: 'center',
-          flexWrap: 'wrap',
-        }}
-      >
-        {items.map((item, i) => {
-          const color =
-            {
-              common: '#9ca3af',
-              uncommon: '#4ade80',
-              rare: '#60a5fa',
-              epic: '#c084fc',
-              legendary: '#fbbf24',
-              mythic: '#ff6b35',
-              secret: '#ff00ff',
-            }[item.rarity] || '#9ca3af';
+// ── NEW: In-game shop upgrade panel ───────────────────────────────────────────
 
+function ShopUpgradePanel({ slots, shopTimer, gold, onPurchase }) {
+  const RARITY_COL = {
+    common:'#94a3b8', rare:'#3b82f6', epic:'#a855f7',
+    legendary:'#f59e0b', mythic:'#ef4444',
+  };
+  if (!slots || !slots.length) return null;
+  return (
+    <div style={{
+      position:'absolute', bottom:90, left:'50%', transform:'translateX(-50%)',
+      background:'rgba(3,7,18,0.94)', border:'1px solid rgba(139,92,246,0.3)',
+      borderRadius:'14px', padding:'14px 18px', zIndex:60,
+      fontFamily:'"Courier New",monospace', minWidth:400,
+      backdropFilter:'blur(12px)',
+    }}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
+        <span style={{color:'#c4b5fd',fontWeight:'700',fontSize:'0.85rem'}}>⚙ UPGRADE SHOP</span>
+        <span style={{color:'#64748b',fontSize:'0.7rem'}}>REFRESH: {shopTimer}s</span>
+        <span style={{color:'#fbbf24',fontSize:'0.85rem',fontWeight:'700'}}>🪙 {Math.floor(gold||0)}</span>
+      </div>
+      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',justifyContent:'center'}}>
+        {slots.map((slot,i) => {
+          const col = RARITY_COL[slot.rarity] || '#94a3b8';
+          const canAfford = (gold||0) >= slot.cost;
           return (
-            <div
-              key={item.instanceId || i}
+            <button key={i} disabled={slot.maxed || !canAfford} onClick={() => onPurchase(i)}
               style={{
-                background: 'rgba(0,0,0,0.5)',
-                border: `1px solid ${color}66`,
-                borderRadius: 8,
-                padding: '6px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
-
-              <div>
-                <div
-                  style={{
-                    color,
-                    fontSize: '0.7rem',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {item.rarity.toUpperCase()}
-                </div>
-
-                <div
-                  style={{
-                    color: '#e2e8f0',
-                    fontSize: '0.72rem',
-                  }}
-                >
-                  {item.name}
-                </div>
+                background: slot.maxed ? 'rgba(0,0,0,0.4)' : canAfford ? `${col}18` : 'rgba(0,0,0,0.3)',
+                border:`1px solid ${slot.maxed?'#374151':canAfford?col:'#374151'}`,
+                borderRadius:'8px', padding:'8px 10px', cursor:slot.maxed||!canAfford?'not-allowed':'pointer',
+                color:'#e2e8f0', fontFamily:'inherit', minWidth:'80px', textAlign:'center',
+                opacity:slot.maxed||!canAfford?0.6:1,
+              }}>
+              <div style={{fontSize:'0.6rem',color:col,letterSpacing:'0.1em',marginBottom:'2px'}}>{slot.rarity?.toUpperCase()}</div>
+              <div style={{fontSize:'0.75rem',fontWeight:'700',marginBottom:'2px'}}>
+                {slot.maxed ? 'MAXED' : `Rank ${['I','II','III','IV','V'][slot.nextRank-1]||'V'}`}
               </div>
-            </div>
+              <div style={{fontSize:'0.65rem',color:'#64748b',marginBottom:'4px'}}>{slot.id?.replace(/_/g,' ')}</div>
+              {!slot.maxed && <div style={{fontSize:'0.75rem',color:canAfford?'#fbbf24':'#6b7280',fontWeight:'700'}}>🪙{slot.cost}</div>}
+            </button>
           );
         })}
       </div>
@@ -698,291 +761,612 @@ function BossDropBanner({ items, bossName }) {
   );
 }
 
-function AbilityHUD({ gameState, abilityLoadout }) {
-  const slots = [
-    { key: 'active1',  hotkey: 'Z', label: 'ACTIVE A' },
-    { key: 'active2',  hotkey: 'X', label: 'ACTIVE B' },
-    { key: 'ultimate', hotkey: 'R', label: 'ULTIMATE' },
-  ];
-  const equipped   = abilityLoadout || {};
-  const cooldowns  = gameState.abilityCooldowns || {};
-  const activeSlots = slots.filter(s => equipped[s.key]);
-  if (activeSlots.length === 0) return null;
+// ── Ruby pickup notification ──────────────────────────────────────────────────
+
+function RubyPickupFlash({ amount }) {
+  if (!amount) return null;
   return (
-    <div style={{ position:'absolute', bottom:90, right:16, display:'flex', flexDirection:'column', gap:6, pointerEvents:'none', fontFamily:'"Courier New",monospace' }}>
-      {activeSlots.map(({ key, hotkey }) => {
-        const ability = equipped[key];
-        if (!ability) return null;
-        const cd      = cooldowns[ability.id] || 0;
-        const maxCd   = ability.cooldown || 1;
-        const ready   = cd <= 0;
-        const pct     = ready ? 1 : 1 - cd / maxCd;
-        const color   = ABILITY_RARITY_COLORS[ability.rarity] || '#9ca3af';
-        const isAnchor    = ability.effectKey === 'TEMPORAL_ANCHOR';
-        const isRecording = isAnchor && gameState.temporalAnchorReady;
-        return (
-          <div key={key} style={{ display:'flex', alignItems:'center', gap:8, background: ready ? 'rgba(8,10,22,0.92)' : 'rgba(0,0,0,0.6)', border:`1px solid ${ready ? color+'aa' : 'rgba(55,65,81,0.4)'}`, borderRadius:10, padding:'6px 10px', boxShadow: ready ? `0 0 12px ${color}44` : 'none', opacity: ready ? 1 : 0.75 }}>
-            <div style={{ position:'relative', width:32, height:32, flexShrink:0 }}>
-              <svg width="32" height="32" style={{ position:'absolute', top:0, left:0, transform:'rotate(-90deg)' }}>
-                <circle cx="16" cy="16" r="13" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-                <circle cx="16" cy="16" r="13" fill="transparent" stroke={isRecording ? '#60a5fa' : (ready ? color : '#475569')} strokeWidth="3" strokeDasharray={`${81.68*pct} 81.68`} strokeLinecap="round"/>
-              </svg>
-              <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1rem' }}>{ability.icon}</div>
-            </div>
-            <div>
-              <div style={{ color: ready ? color : '#475569', fontSize:'0.65rem', fontWeight:700, whiteSpace:'nowrap' }}>
-                {isRecording ? '⏮ REWIND READY' : ability.name}
-              </div>
-              <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:1 }}>
-                <span style={{ background:'rgba(255,255,255,0.08)', borderRadius:3, padding:'0 5px', fontSize:'0.55rem', color:'#475569' }}>[{hotkey}]</span>
-                {ready ? <span style={{ color:'#4ade80', fontSize:'0.6rem' }}>READY</span> : <span style={{ color:'#64748b', fontSize:'0.6rem' }}>{cd.toFixed(1)}s</span>}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-      {gameState.godMachineActive && (
-        <div style={{ background:'rgba(251,191,36,0.15)', border:'1px solid #fbbf24', borderRadius:10, padding:'6px 12px', color:'#fbbf24', fontSize:'0.7rem', fontWeight:700, textAlign:'center' }}>
-          ⚙️ GOD MACHINE ACTIVE
-        </div>
-      )}
-      {gameState.lastSignalActive && (
-        <div style={{ background:'rgba(239,68,68,0.15)', border:'1px solid #ef4444', borderRadius:10, padding:'6px 12px', color:'#ef4444', fontSize:'0.7rem', fontWeight:700, textAlign:'center' }}>
-          📻 LAST SIGNAL — 300% DMG
-        </div>
-      )}
+    <div style={{
+      position:'absolute', top:'35%', left:'50%', transform:'translateX(-50%)',
+      color:'#e879f9', fontWeight:'900', fontSize:'1.4rem',
+      fontFamily:'"Courier New",monospace', zIndex:50, pointerEvents:'none',
+      textShadow:'0 0 20px #e879f9',
+      animation:'fadeUp 1.2s ease-out forwards',
+    }}>
+      💎 +{amount} RUBIES
     </div>
   );
 }
 
-export default function SpaceRocketRoyale() {
-  const canvasRef = useRef(null);
-  const engineRef = useRef(null);
-  const audioRef = useRef(new AudioEngine());
-  
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN APP
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function Page() {
+  // ── Save / persistence ────────────────────────────────────────────────────
+  const {
+    save, getBestScore, recordRunResult,
+    addRunLootToProfile, addRunAbilitiesToProfile,
+    addRubies, addAccountXP, addResearchPoints, spendResearchPoints,
+    unlockTechNode, unlockAchievement, updateAchievementStat, setAchievementStats,
+    updateMissionProgress, completeMission,
+    addPet, setActivePet,
+    updateShopRanks,
+    performPrestige, buyPrestigeUpgrade,
+    recordHourlyShopPurchase, spendRubies,
+    setActiveTitle, forceManualSync,
+  } = usePersistence();
+
+  // ── Ability hooks ──────────────────────────────────────────────────────────
+  const {
+    abilityInventory, abilityLoadout,
+    equipAbility, unequipAbility,
+  } = useAbilities(save, forceManualSync);
+
+  // ── Screens ────────────────────────────────────────────────────────────────
+  // screens: 'menu' | 'mode_select' | 'game' | 'gear_hangar' | 'ability_view' | 'meta_hub'
   const [screen, setScreen] = useState('menu');
-  const [gameState, setGameState] = useState({});
-  const [gameMode, setGameMode] = useState('endless');
-  const [engine, setEngine] = useState(null);
+  const [selectedMode, setSelectedMode] = useState('classic');
 
-  const { save, getBestScore, recordRunResult, addRunLootToProfile, addRunAbilitiesToProfile, forceManualSync } = usePersistence();
-  const bestScore = getBestScore(gameMode);
-
-  // Gear pickup / loot
-  const [pickupItem, setPickupItem] = useState(null);
-  const [lootSummary, setLootSummary] = useState(null);
-  const pickupTimerRef = useRef(null);
-
-  // Ability pickup / loot
-  const [pickupAbility, setPickupAbility] = useState(null);
-  const [abilityLootSummary, setAbilityLootSummary] = useState(null);
-  const abilityPickupTimerRef = useRef(null);
-
-  // Ability inventory/loadout hook (for AbilityScreen)
-  const handleProfileUpdate = useCallback((updatedSave) => {
-    try { localStorage.setItem('srr_save', JSON.stringify(updatedSave)); } catch(e){}
-    forceManualSync(updatedSave);
-  }, [forceManualSync]);
-  const abilityHook = useAbilities(save, handleProfileUpdate);
-
-  const [currentAbilityLoadout, setCurrentAbilityLoadout] = useState(null);
+  // ── Engine refs ───────────────────────────────────────────────────────────
+  const canvasRef    = useRef(null);
   const containerRef = useRef(null);
+  const engineRef    = useRef(null);
+  const audioRef     = useRef(null);
+
+  // ── Persistent shop state (survives open/close cycles) ───────────────────
+  const SHOP_REFRESH = 20;
+  const buildShopStock = (purchased) => {
+    const counts = {};
+    (purchased || []).forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+    return [...UPGRADES].sort(() => Math.random() - 0.5)
+      .filter(u => (counts[u.id] || 0) < 5).slice(0, 6);
+  };
+  const [shopStock, setShopStock]   = useState(() => buildShopStock([]));
+  const [shopTimer, setShopTimer]   = useState(SHOP_REFRESH);
+  const shopTimerRef                = useRef(SHOP_REFRESH);
+  const shopPurchasedRef            = useRef([]);
+
+  // Always keep shopPurchasedRef in sync with live purchasedItems
+  useEffect(() => {
+    shopPurchasedRef.current = gameState.purchasedItems || [];
+  }); // runs every render
+
+  // Global 20-second ticker — runs regardless of whether shop is open
+  useEffect(() => {
+    if (screen !== 'game') return;
+    const id = setInterval(() => {
+      shopTimerRef.current -= 1;
+      if (shopTimerRef.current <= 0) {
+        shopTimerRef.current = SHOP_REFRESH;
+        setShopStock(buildShopStock(shopPurchasedRef.current));
+      }
+      setShopTimer(shopTimerRef.current);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [screen]); // eslint-disable-line
+
+  // ── In-game state (from onStateChange) ───────────────────────────────────
+  const [gameState, setGameState] = useState({});
+
+  // ── Loot / summary overlays ──────────────────────────────────────────────
+  const [lootSummary, setLootSummary]   = useState(null);      // gear loot
+  const [abilityLootSummary, setAbilityLootSummary] = useState(null);
+  const [postGameData, setPostGameData] = useState(null);
+  const [chestToOpen, setChestToOpen]   = useState(null);      // { type, rewards, id }
+
+  // ── UI flags ──────────────────────────────────────────────────────────────
+  const [paused, setPaused]         = useState(false);
+  const [showShop, setShowShop]     = useState(false);
+  const [mounted, setMounted]       = useState(false);
+  const [metaHubTab, setMetaHubTab] = useState(0);   // which tab to open in MetaHubScreen
+
+  const goMetaHub = useCallback((tabIndex) => {
+    setMetaHubTab(tabIndex);
+    setScreen('meta_hub');
+  }, []);
+
+  useEffect(() => setMounted(true), []);
+
+  // Keep canvas resolution in sync with its actual display size (window resize only).
   useEffect(() => {
     const resize = () => {
       if (!canvasRef.current || !containerRef.current) return;
       const { width, height } = containerRef.current.getBoundingClientRect();
-      canvasRef.current.width = Math.floor(width); 
+      canvasRef.current.width  = Math.floor(width);
       canvasRef.current.height = Math.floor(height);
-      if (engineRef.current) { engineRef.current.W = canvasRef.current.width; engineRef.current.H = canvasRef.current.height; }
+      if (engineRef.current) {
+        engineRef.current.W = canvasRef.current.width;
+        engineRef.current.H = canvasRef.current.height;
+      }
     };
-    resize(); 
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
 
+  // ── Audio init ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!audioRef.current) audioRef.current = new AudioEngine();
+  }, []);
+
+  // ── State change handler from GameEngine ─────────────────────────────────
   const handleStateChange = useCallback((update) => {
-    setGameState(prev => ({ ...prev, ...update }));
+    if (update.shopOpen    !== undefined) setShowShop(update.shopOpen);
+    if (update.paused      !== undefined) setPaused(update.paused);
+    if (update.chestOpened) {
+      setChestToOpen(update.chestOpened);
+      // Pause the game while chest is open
+      engineRef.current?.pause?.();
+    }
 
     if (update.gameOver) {
-      recordRunResult({
-        mode: gameMode,
-        score: update.finalScore,
-        kills: update.finalKills,
-        level: update.finalLevel,
-        wave: update.finalWave,
-        sessionTime: update.finalTime,
-      });
-      // Show ability loot summary first, then gear loot, then gameover
-      const hasAbilityLoot = update.runAbilityLoot && update.runAbilityLoot.length > 0;
-      const hasGearLoot    = update.runLoot && update.runLoot.length > 0;
-      if (hasAbilityLoot) {
-        setAbilityLootSummary({
-          items:  update.runAbilityLoot,
-          xp:     update.finalXP,
-          coins:  update.finalGold,
-          bosses: update.finalBossesKilled,
-          // stash gear loot so it shows next
-          _pendingGearLoot: hasGearLoot ? { items: update.runLoot, xp: update.finalXP, coins: update.finalGold, bosses: update.finalBossesKilled } : null,
+      const {
+        finalScore, finalKills, finalLevel, finalTime, finalWave,
+        finalBossesKilled, finalGold, finalXP,
+        runLoot, runAbilityLoot,
+        finalRubies, finalAccountXP, finalMode, runKillStats, runMinutes,
+      } = update;
+
+      // Persist loot
+      if (runLoot?.length)        addRunLootToProfile(runLoot);
+      if (runAbilityLoot?.length) addRunAbilitiesToProfile(runAbilityLoot);
+
+      // Persist rubies & account XP
+      if (finalRubies > 0)     addRubies(finalRubies);
+      if (finalAccountXP > 0)  addAccountXP(finalAccountXP);
+
+      // Grant research points based on account level (level * 2 per run)
+      const researchGain = Math.max(5, (save.account_level ?? 1) * 2);
+      addResearchPoints(researchGain);
+
+      // Record best score
+      recordRunResult({ mode: finalMode || selectedMode, score: finalScore || 0 });
+
+      // Update achievement stats
+      if (runKillStats) {
+        setAchievementStats({
+          total_kills:   (save.achievementStats?.total_kills   || 0) + (runKillStats.kills   || 0),
+          total_elites:  (save.achievementStats?.total_elites  || 0) + (runKillStats.elites  || 0),
+          total_bosses:  (save.achievementStats?.total_bosses  || 0) + (runKillStats.bosses  || 0),
+          total_crits:   (save.achievementStats?.total_crits   || 0) + (runKillStats.crits   || 0),
+          run_kills:     runKillStats.kills   || 0,
+          run_bosses:    runKillStats.bosses  || 0,
+          run_elites:    runKillStats.elites  || 0,
+          run_minutes:   Math.max(save.achievementStats?.run_minutes || 0, runMinutes || 0),
+          total_runs:    (save.achievementStats?.total_runs || 0) + 1,
+          total_chests:  (save.achievementStats?.total_chests || 0) + (runKillStats.chests || 0),
+          total_gear:    (save.achievementStats?.total_gear   || 0) + (runKillStats.gear   || 0),
         });
-      } else if (hasGearLoot) {
-        setLootSummary({
-          items:   update.runLoot,
-          xp:      update.finalXP,
-          coins:   update.finalGold,
-          bosses:  update.finalBossesKilled,
+
+        // Update daily mission progress
+        const missions = save.dailyMissions || [];
+        missions.forEach((m, i) => {
+          if (m.claimed) return;
+          let progress = 0;
+          if (m.stat === 'run_kills')   progress = runKillStats.kills  || 0;
+          if (m.stat === 'run_bosses')  progress = runKillStats.bosses || 0;
+          if (m.stat === 'run_elites')  progress = runKillStats.elites || 0;
+          if (m.stat === 'run_minutes') progress = runMinutes          || 0;
+          if (progress > 0) updateMissionProgress(i, progress);
         });
-      } else {
-        setScreen('gameover');
       }
+
+      // Track mode played
+      if (finalMode && !(save.achievementStats?.modes_played || []).includes(finalMode)) {
+        updateAchievementStat('modes_played', finalMode);
+      }
+
+      // Show loot summaries
+      if (runLoot?.length) setLootSummary({ items: runLoot });
+      if (runAbilityLoot?.length) setAbilityLootSummary({ items: runAbilityLoot });
+
+      setPostGameData({
+        finalScore, finalKills, finalLevel, finalTime, finalWave,
+        finalBossesKilled, finalGold, finalXP,
+        finalRubies, finalAccountXP, finalMode,
+        runLootCount: runLoot?.length || 0,
+        abilityLootCount: runAbilityLoot?.length || 0,
+      });
+
+      setScreen('menu');
+      return;
     }
 
-    // Gear pickup notification
-    if (update.equipmentPickup) {
-      setPickupItem(update.equipmentPickup);
-      if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
-      pickupTimerRef.current = setTimeout(() => setPickupItem(null), 3200);
-    }
-    if (update.equipmentPickup === null) setPickupItem(null);
+    setGameState(prev => ({ ...prev, ...update }));
+  }, [
+    addRubies, addAccountXP, addRunLootToProfile, addRunAbilitiesToProfile,
+    recordRunResult, setAchievementStats, updateAchievementStat,
+    selectedMode, save.achievementStats,
+  ]);
 
-    // Ability pickup notification
-    if (update.abilityPickup) {
-      setPickupAbility(update.abilityPickup);
-      if (abilityPickupTimerRef.current) clearTimeout(abilityPickupTimerRef.current);
-      abilityPickupTimerRef.current = setTimeout(() => setPickupAbility(null), 3200);
-    }
-    if (update.abilityPickup === null) setPickupAbility(null);
-  }, [gameMode, recordRunResult]);
-
-  const startGame = useCallback((mode) => {
-    setGameMode(mode);
+  // ── Start game ────────────────────────────────────────────────────────────
+  const startGame = useCallback((modeId) => {
+    setSelectedMode(modeId);
     setScreen('game');
-    // snapshot loadouts at start time
-    const gearLoadout    = save?.gearLoadout    || null;
-    const abilityLoadout = save?.abilityLoadout || null;
-    setCurrentAbilityLoadout(abilityLoadout);
-    setTimeout(() => {
-      if (!canvasRef.current) return;
-      const eng = new GameEngine(canvasRef.current, handleStateChange, audioRef.current);
-      eng.equipmentBonuses = gearLoadout;
-      eng.abilityLoadout   = abilityLoadout;
-      engineRef.current = eng;
-      setEngine(eng);
-      eng.startGame(mode);
-    }, 50);
-  }, [handleStateChange, save?.gearLoadout, save?.abilityLoadout]);
-
-  const restartGame = useCallback(() => startGame(gameMode), [gameMode, startGame]);
-  const goMenu = useCallback(() => { if (engineRef.current) { engineRef.current.destroy(); engineRef.current = null; } setScreen('menu'); setGameState({}); }, []);
-
-  // Called from AbilityLootSummary "Save to Ability Vault" button
-  const handleSaveAbilityLoot = useCallback(() => {
-    if (abilityLootSummary?.items?.length) {
-      addRunAbilitiesToProfile(abilityLootSummary.items);
-    }
-    const pending = abilityLootSummary?._pendingGearLoot;
-    setAbilityLootSummary(null);
-    if (pending) {
-      setLootSummary(pending);
-    } else {
-      setScreen('gameover');
-    }
-  }, [abilityLootSummary, addRunAbilitiesToProfile]);
-
-  // Called from LootSummary "Save to Gear Hangar" button
-  const handleSaveLoot = useCallback(() => {
-    if (!lootSummary?.items?.length) { setLootSummary(null); setScreen('gameover'); return; }
-    addRunLootToProfile(lootSummary.items);
+    setGameState({});
+    setPostGameData(null);
     setLootSummary(null);
-    setScreen('gameover');
-  }, [lootSummary, addRunLootToProfile]);
+    setAbilityLootSummary(null);
+    setChestToOpen(null);
+    setPaused(false);
+    setShowShop(false);
+    // Reset shop stock for new run
+    shopTimerRef.current = SHOP_REFRESH;
+    setShopTimer(SHOP_REFRESH);
+    setShopStock(buildShopStock([]));
+  }, []); // eslint-disable-line
 
-  useEffect(() => () => { if (engineRef.current) engineRef.current.destroy(); }, []);
+  // Initialize engine after canvas mounts
+  useEffect(() => {
+    if (screen !== 'game') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Set canvas internal resolution to match its display size
+    if (containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      canvas.width  = Math.floor(width);
+      canvas.height = Math.floor(height);
+    }
+
+    // Build meta stats from all sources
+    const shopStats = computeShopStats(save.shopPurchasedRanks || {});
+    const metaStats = computeAllMetaStats({
+      techUnlocked:      save.techUnlocked || [],
+      activePetId:       save.activePetId,
+      prestigePurchased: save.prestigePurchased || [],
+      shopStats,
+    });
+
+    const eng = new GameEngine(canvas, handleStateChange, audioRef.current);
+    eng.setMetaStats(metaStats);
+    eng.equipmentBonuses = save.gearLoadout || null;
+
+    // Give ability loadout to engine
+    if (abilityLoadout) eng.abilityLoadout = abilityLoadout;
+
+    eng.startGame(selectedMode);
+    engineRef.current = eng;
+
+    return () => { eng.stop?.(); engineRef.current = null; };
+  }, [screen]);  // eslint-disable-line
+
+  // ── Navigation helpers ────────────────────────────────────────────────────
+  const goMenu = () => { setScreen('menu'); engineRef.current = null; };
+
+  const handleSaveLoot = useCallback((items) => {
+    addRunLootToProfile(items);
+    setLootSummary(null);
+  }, [addRunLootToProfile]);
+
+  const handleSaveAbilityLoot = useCallback((items) => {
+    addRunAbilitiesToProfile(items);
+    setAbilityLootSummary(null);
+  }, [addRunAbilitiesToProfile]);
+
+  const handleShopPurchase = useCallback((slotIndex) => {
+    if (!engineRef.current) return;
+    const result = engineRef.current.purchaseShopUpgrade(slotIndex);
+    if (result?.success) {
+      // Persist the new rank
+      updateShopRanks({ [result.upgradeId]: result.newRank });
+    }
+  }, [updateShopRanks]);
+
+  // ── Mission claims ────────────────────────────────────────────────────────
+  const handleClaimMission = useCallback((missionId) => {
+    completeMission(missionId);
+  }, [completeMission]);
+
+  // ── Tech tree unlock ─────────────────────────────────────────────────────
+  const handleUnlockTech = useCallback((nodeId, cost) => {
+    if (spendResearchPoints(cost)) {
+      unlockTechNode(nodeId);
+    }
+  }, [spendResearchPoints, unlockTechNode]);
+
+  // ── Hourly shop buy ───────────────────────────────────────────────────────
+  const handleHourlyBuy = useCallback((item, slotIdx) => {
+    if (!spendRubies(item.cost)) return;
+    recordHourlyShopPurchase(item.type + '_' + slotIdx);
+    // TODO: grant the item (chest, pet, boost, etc.)
+  }, [spendRubies, recordHourlyShopPurchase]);
+
+  // ── Prestige buy ──────────────────────────────────────────────────────────
+  const handlePrestigeBuy = useCallback((upgradeId, cost) => {
+    buyPrestigeUpgrade(upgradeId, cost);
+  }, [buyPrestigeUpgrade]);
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═════════════════════════════════════════════════════════════════════════
+
+  // ── GEAR HANGAR ──────────────────────────────────────────────────────────
+  if (screen === 'gear_hangar') {
+    return (
+      <GearHangarScreen
+        profile={save}
+        onProfileUpdate={forceManualSync}
+        onBack={goMenu}
+      />
+    );
+  }
+
+  // ── ABILITY VAULT ────────────────────────────────────────────────────────
+  if (screen === 'ability_view') {
+    return (
+      <AbilityScreen
+        profile={save}
+        onProfileUpdate={forceManualSync}
+        onBack={goMenu}
+      />
+    );
+  }
+
+  // ── MODE SELECT ──────────────────────────────────────────────────────────
+  if (screen === 'mode_select') {
+    return (
+      <ModeSelectScreen
+        onSelect={startGame}
+        onBack={goMenu}
+        bestScores={save.bestScores || {}}
+        save={save}
+      />
+    );
+  }
+
+  // ── META HUB ─────────────────────────────────────────────────────────────
+  if (screen === 'meta_hub') {
+    return (
+      <MetaHubScreen
+        save={save}
+        onBack={goMenu}
+        onUnlockTech={handleUnlockTech}
+        onBuyPrestige={handlePrestigeBuy}
+        onSetPet={setActivePet}
+        onBuyHourlyItem={handleHourlyBuy}
+        onClaimMission={handleClaimMission}
+        initialTab={metaHubTab}
+      />
+    );
+  }
+
+  // ── IN GAME ──────────────────────────────────────────────────────────────
+  if (screen === 'game') {
+    const engine = engineRef.current;
+    const { shopSlots, shopTimer, sessionRubies, rubyPickup } = gameState;
+    return (
+      <div ref={containerRef} style={{ position:'fixed', inset:0, background:'#030712' }}>
+        <canvas
+          ref={canvasRef}
+          style={{ width:'100%', height:'100%', display:'block' }}
+        />
+        {/* HUD */}
+        <HUD state={gameState} engine={engine} />
+
+        {/* Ruby counter in HUD */}
+        <div style={{
+          position:'absolute', top:16, right:16, marginTop:80,
+          color:'#e879f9', fontWeight:'700', fontSize:'0.85rem',
+          fontFamily:'"Courier New",monospace', pointerEvents:'none',
+        }}>
+          💎 {(sessionRubies||0)} run rubies
+        </div>
+
+        {/* Ability HUD */}
+        {engine && (
+          <div style={{ position:'absolute', bottom:20, right:16, pointerEvents:'auto' }}>
+            {/* Abilities are rendered via the existing AbilityHUD which lives in page.js already */}
+          </div>
+        )}
+
+        {/* In-game upgrade shop */}
+        {showShop && engine && (
+          <ShopModal
+            engine={engine}
+            gold={gameState.gold || 0}
+            purchasedItems={gameState.purchasedItems || []}
+            stock={shopStock}
+            timer={shopTimer}
+          />
+        )}
+
+        {/* Pause menu */}
+        {paused && (
+          <PauseMenu
+            engine={engine}
+            audio={audioRef.current}
+            onMenu={() => { engine?.resume(); goMenu(); }}
+            onLeave={() => engine?.quitGame()}
+          />
+        )}
+
+        {/* Boss drop banner */}
+        {gameState.bossDropItems && (
+          <BossDropBanner items={gameState.bossDropItems} bossName={gameState.bossDropBossName} />
+        )}
+
+        {/* Level up flash */}
+        {gameState.levelUp && <LevelUpFlash level={gameState.level} />}
+
+        {/* Boss alert */}
+        {gameState.bossAlert && gameState.bossName && <BossAlert name={gameState.bossName} />}
+
+        {/* Boss phase alert */}
+        {gameState.bossPhaseAlert && (
+          <div style={{ position:'absolute', top:'30%', left:'50%', transform:'translate(-50%,-50%)',
+            color:'#ef4444', fontWeight:'900', fontSize:'1.1rem',
+            fontFamily:'"Courier New",monospace', zIndex:45, textShadow:'0 0 20px #ef4444' }}>
+            {gameState.bossPhaseAlert}
+          </div>
+        )}
+
+        {/* Ruby pickup flash */}
+        {gameState.rubyPickup && <RubyPickupFlash amount={gameState.rubyPickup} />}
+
+        {/* Chest open animation screen */}
+        {chestToOpen && (
+          <ChestOpenScreen
+            chest={chestToOpen}
+            rewards={chestToOpen.rewards}
+            onClose={(displayRewards) => {
+              // Persist ruby reward if any
+              if (chestToOpen.rewards?.rubies > 0) addRubies(chestToOpen.rewards.rubies);
+              // Add generated gear/ability items to inventory
+              if (displayRewards?.length) {
+                const gearItems = displayRewards.filter(r => r.type === 'gear' && r.generatedItem).map(r => r.generatedItem);
+                const abilityItems = displayRewards.filter(r => r.type === 'ability' && r.generatedItem).map(r => r.generatedItem);
+                if (gearItems.length)    addRunLootToProfile(gearItems);
+                if (abilityItems.length) addRunAbilitiesToProfile(abilityItems);
+              }
+              // Track chest opened
+              updateAchievementStat('chests_opened', 1);
+              setChestToOpen(null);
+              // Resume game
+              engineRef.current?.resume?.();
+            }}
+          />
+        )}
+
+        {/* Gear pickup notification */}
+        {gameState.equipmentPickup && <PickupNotification item={gameState.equipmentPickup} />}
+
+        {/* Ability pickup notification */}
+        {gameState.abilityPickup && <AbilityPickupNotification ability={gameState.abilityPickup} />}
+
+        {/* Gear loot summary (on game end) */}
+        {lootSummary && (
+          <LootSummary
+            items={lootSummary.items}
+            onSave={handleSaveLoot}
+          />
+        )}
+
+        {/* Ability loot summary (on game end) */}
+        {abilityLootSummary && (
+          <AbilityLootSummary
+            abilities={abilityLootSummary.items}
+            onSave={handleSaveAbilityLoot}
+          />
+        )}
+
+        {/* Ability unlock popup */}
+        {gameState.abilityUnlocked && (
+          <div style={{ position:'absolute', top:'20%', left:'50%', transform:'translate(-50%,-50%)',
+            background:'rgba(3,7,18,0.95)', border:'1px solid #a855f7', borderRadius:'14px',
+            padding:'16px 28px', textAlign:'center', zIndex:80,
+            fontFamily:'"Courier New",monospace' }}>
+            <div style={{color:'#a855f7',fontSize:'0.7rem',letterSpacing:'0.15em'}}>NEW ABILITY</div>
+            <div style={{color:'#e2e8f0',fontWeight:'700',fontSize:'1.1rem',marginTop:'4px'}}>
+              {gameState.abilityUnlocked.name}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── MAIN MENU ─────────────────────────────────────────────────────────────
+  const bestScore = mounted ? (getBestScore(selectedMode) || getBestScore('classic') || 0) : 0;
+  const accountRubies = mounted ? (save.rubies || 0) : 0;
 
   return (
-    <>
-      <main aria-label="Space Rocket Royale game">
-        <div ref={containerRef} style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden', background: '#030712', cursor: screen === 'game' ? 'crosshair' : 'default' }}>
-          <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+    <div style={{ position:'fixed', inset:0, background:'#030712', fontFamily:'"Courier New",monospace' }}>
+      <StarfieldCanvas />
 
-          <Suspense fallback={null}>
-            {screen === 'menu' && (
-              <MainMenu
-                onStart={(mode) => {
-                  if (mode === 'inventory_view') {
-                    setScreen('inventory');
-                  } else if (mode === 'ability_view') {
-                    setScreen('abilities');
-                  } else {
-                    startGame(mode);
-                  }
-                }}
-                bestScore={bestScore}
-              />
-            )}
+      {/* Ruby display */}
+      <div style={{
+        position:'absolute', top:16, right:16, zIndex:10,
+        background:'rgba(232,121,249,0.1)', border:'1px solid rgba(232,121,249,0.3)',
+        borderRadius:'10px', padding:'6px 14px',
+        color:'#e879f9', fontWeight:'700', fontSize:'0.9rem',
+      }}>
+        💎 {accountRubies.toLocaleString()}
+      </div>
 
-            {screen === 'inventory' && (
-              <GearHangarScreen
-                profile={save}
-                onProfileUpdate={handleProfileUpdate}
-                onBack={goMenu}
-              />
-            )}
-
-            {screen === 'abilities' && (
-              <AbilityScreen
-                profile={save}
-                onProfileUpdate={handleProfileUpdate}
-                onBack={goMenu}
-              />
-            )}
-
-            {screen === 'game' && (
-              <>
-                <HUD state={gameState} engine={engine} />
-                <AbilityHUD gameState={gameState} abilityLoadout={currentAbilityLoadout} />
-                {gameState.shopOpen && engine && <ShopModal engine={engine} gold={gameState.gold || 0} purchasedItems={gameState.purchasedItems || []} />}
-                {gameState.levelUp && <LevelUpFlash level={gameState.level} />}
-                {gameState.bossAlert && gameState.bossName && <BossAlert name={gameState.bossName} />}
-                {gameState.bossDropItems && gameState.bossDropItems.length > 0 && (
-                  <BossDropBanner items={gameState.bossDropItems} bossName={gameState.bossDropBossName} />
-                )}
-                {pickupItem && <PickupNotification item={pickupItem} />}
-                {pickupAbility && <AbilityPickupNotification ability={pickupAbility} />}
-                {gameState.paused && (
-                  <PauseMenu
-                    engine={engine}
-                    audio={audioRef.current}
-                    onMenu={() => { engine?.resume(); goMenu(); }}
-                  />
-                )}
-              </>
-            )}
-
-            {abilityLootSummary && (
-              <AbilityLootSummary
-                abilityItems={abilityLootSummary.items}
-                xpEarned={abilityLootSummary.xp}
-                coinsEarned={abilityLootSummary.coins}
-                bossesDefeated={abilityLootSummary.bosses}
-                onClose={handleSaveAbilityLoot}
-              />
-            )}
-
-            {lootSummary && (
-              <LootSummary
-                lootItems={lootSummary.items}
-                xpEarned={lootSummary.xp}
-                coinsEarned={lootSummary.coins}
-                bossesDefeated={lootSummary.bosses}
-                onClose={handleSaveLoot}
-              />
-            )}
-
-            {screen === 'gameover' && <GameOverScreen state={gameState} onRestart={restartGame} onMenu={goMenu} />}
-          </Suspense>
+      <div style={{
+        position:'absolute', inset:0, display:'flex', flexDirection:'column',
+        alignItems:'center', justifyContent:'center', zIndex:2, padding:20,
+      }}>
+        {/* Title */}
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <h1 style={{
+            fontSize:'clamp(2rem,5vw,3.5rem)', fontWeight:900, letterSpacing:'0.05em',
+            background:'linear-gradient(135deg,#c4b5fd,#38bdf8)',
+            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', margin:0,
+          }}>SPACE ROCKET ROYALE</h1>
+          {mounted && bestScore > 0 && (
+            <div style={{ marginTop:8, color:'#fbbf24', fontSize:'0.85rem' }}>
+              🏆 Best Score: {bestScore.toLocaleString()}
+            </div>
+          )}
         </div>
-      </main>
+
+        {/* PLAY button */}
+        <button
+          onClick={() => setScreen('mode_select')}
+          style={{
+            background:'linear-gradient(135deg,#7c3aed,#4f46e5)',
+            border:'2px solid #7c3aed', borderRadius:'16px',
+            padding:'18px 60px', cursor:'pointer', color:'white',
+            fontWeight:'900', letterSpacing:'0.1em',
+            fontFamily:'"Courier New",monospace', fontSize:'1.4rem',
+            marginBottom:28, boxShadow:'0 0 40px rgba(124,58,237,0.5)',
+            transition:'all 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform='scale(1.05)'}
+          onMouseLeave={e => e.currentTarget.style.transform='scale(1)'}
+        >
+          🚀 PLAY
+        </button>
+
+        {/* Nav buttons row 1: collection screens */}
+        <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:12, marginBottom:12, maxWidth:700 }}>
+          {[
+            { icon:'⚙️', label:'GEAR HANGAR',  color:'#7c3aed', action:() => setScreen('gear_hangar') },
+            { icon:'⚡', label:'ABILITIES',     color:'#3b82f6', action:() => setScreen('ability_view') },
+            { icon:'🏆', label:'ACHIEVEMENTS',  color:'#f59e0b', action:() => goMetaHub(0) },
+            { icon:'📋', label:'MISSIONS',      color:'#22c55e', action:() => goMetaHub(1) },
+          ].map(({ icon, label, color, action }) => (
+            <button key={label} onClick={action} style={{
+              background:`rgba(15,23,42,0.9)`, border:`1px solid ${color}66`,
+              borderRadius:12, padding:'10px 18px', cursor:'pointer',
+              color, fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.08em',
+              fontFamily:'"Courier New",monospace', display:'flex', alignItems:'center', gap:6,
+            }}>
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Nav buttons row 2: progression */}
+        <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:12, marginBottom:28, maxWidth:700 }}>
+          {[
+            { icon:'🔬', label:'TECH TREE', color:'#a855f7', action:() => goMetaHub(2) },
+            { icon:'🐾', label:'PETS',      color:'#ec4899', action:() => goMetaHub(3) },
+            { icon:'🛍', label:'SHOP',      color:'#e879f9', action:() => goMetaHub(4) },
+            { icon:'⭐', label:'PRESTIGE',  color:'#f59e0b', action:() => goMetaHub(5) },
+          ].map(({ icon, label, color, action }) => (
+            <button key={label} onClick={action} style={{
+              background:`rgba(15,23,42,0.9)`, border:`1px solid ${color}66`,
+              borderRadius:12, padding:'10px 18px', cursor:'pointer',
+              color, fontWeight:700, fontSize:'0.8rem', letterSpacing:'0.08em',
+              fontFamily:'"Courier New",monospace', display:'flex', alignItems:'center', gap:6,
+            }}>
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+
+        <ShareButton />
+      </div>
+
+      {/* Post-game summary overlay */}
+      {postGameData && (
+        <PostGameSummary data={postGameData} onClose={() => setPostGameData(null)} />
+      )}
+
       <HomepageSeoContent />
-    </>
+    </div>
   );
 }

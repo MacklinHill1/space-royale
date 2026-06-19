@@ -29,6 +29,15 @@ import {
   voidEchoShot,
   getCooldownMult,
 } from '../../../systems/AbilitySystem.js';
+import { ENEMY_TYPES } from '../../../systems/EnemyData.js';
+import { renderEnemy } from '../../../systems/EnemyRenderer.js';
+import { WaveDirector, configureEnemy, updateEnemyAI } from '../../../systems/WaveDirector.js';
+import { BOSSES as BOSS_DEFS, selectBoss, scaleBossHp } from '../../../systems/BossData.js';
+import { renderBoss } from '../../../systems/BossRenderer.js';
+import { MODE_MAP, getModeRules, getModeInitialState } from '../../../constants/GameModes.js';
+import { ShopManager, computeShopStats } from '../../../systems/ShopSystem.js';
+import { rollRubyDrop } from '../../../systems/MetaProgression.js';
+import { generateChestRewards, BOSS_CHEST_TABLE } from '../../../systems/ChestSystem.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MATH UTILITIES
@@ -158,11 +167,12 @@ export const RARITY_COLOR = { common:'#9ca3af', uncommon:'#4ade80', rare:'#60a5f
 export const RARITY_GLOW  = { common:'rgba(156,163,175,0.3)', uncommon:'rgba(74,222,128,0.3)', rare:'rgba(96,165,250,0.3)', epic:'rgba(192,132,252,0.4)', legendary:'rgba(251,191,36,0.5)', mythic:'rgba(255,0,255,0.6)' };
 
 export const CHEST_TIERS = {
-  COMMON_CACHE: { name: 'Common Cache', color: '#9ca3af', rewards: { coins: [50, 100], xp: [100, 200], equipChance: 0.3, abilityChance: 0.1 } },
-  RARE_CRATE: { name: 'Rare Crate', color: '#60a5fa', rewards: { coins: [150, 300], xp: [300, 500], equipChance: 0.5, abilityChance: 0.25 } },
-  ELITE_ARSENAL: { name: 'Elite Arsenal', color: '#c084fc', rewards: { coins: [400, 700], xp: [600, 1000], equipChance: 0.7, abilityChance: 0.4 } },
-  MYTHIC_RELIC: { name: 'Mythic Relic Chest', color: '#fbbf24', rewards: { coins: [800, 1500], xp: [1200, 2000], equipChance: 0.85, abilityChance: 0.6 } },
-  COSMIC_VAULT: { name: 'Cosmic Vault Chest', color: '#ff00ff', rewards: { coins: [2000, 4000], xp: [3000, 5000], equipChance: 0.95, abilityChance: 0.8 } },
+  COMMON_CACHE: { name: 'Common Cache',      color: '#9ca3af', rewards: { coins: [50, 100],    xp: [100, 200],   equipChance: 0.3,  abilityChance: 0.1  } },
+  RARE_CRATE:   { name: 'Rare Crate',        color: '#60a5fa', rewards: { coins: [150, 300],   xp: [300, 500],   equipChance: 0.5,  abilityChance: 0.25 } },
+  ELITE_ARSENAL:{ name: 'Elite Arsenal',     color: '#c084fc', rewards: { coins: [400, 700],   xp: [600, 1000],  equipChance: 0.7,  abilityChance: 0.4  } },
+  MYTHIC_RELIC: { name: 'Mythic Relic',      color: '#fbbf24', rewards: { coins: [800, 1500],  xp: [1200, 2000], equipChance: 0.85, abilityChance: 0.6  } },
+  COSMIC_VAULT: { name: 'Cosmic Vault',      color: '#ff00ff', rewards: { coins: [2000, 4000], xp: [3000, 5000], equipChance: 0.95, abilityChance: 0.8  } },
+  RAID_CHEST:   { name: 'Raid Chest',        color: '#f43f5e', rewards: { coins: [1000, 2000], xp: [2000, 3500], equipChance: 0.9,  abilityChance: 0.7  } },
 };
 
 export const ABILITIES = {
@@ -203,8 +213,14 @@ const createPlayer = (cx, cy) => ({
 
 const makeEnemy = () => ({
   pos:{x:0,y:0}, vel:{x:0,y:0}, angle:0, hp:1, maxHp:1, radius:12,
-  type:'drone', color:'#ef4444', glowColor:'#ef444466', speed:1, damage:8, xpDrop:10, goldDrop:5,
-  state:'chase', stateTimer:0, shootCooldown:0, fireRate:0, active:false, flash:0, phase:1, spawnFlash:0,
+  type:'fighter', tier:'easy', color:'#ef4444', glowColor:'#ef444466',
+  speed:1, damage:8, xpDrop:10, goldDrop:5,
+  behavior:'chase', active:false, flash:0, spawnFlash:0,
+  shootCooldown:0, fireRate:0,
+  isElite:false,
+  state:'chase', stateTimer:0,
+  behaviorState:'idle', behaviorTimer:0,
+  dashTarget:null, carrierSpawnTimer:0, shieldTarget:null, warpCooldown:60,
 });
 const makeBullet = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, damage:1, radius:4, color:'#38bdf8', pierce:0, pierceCount:0, active:false, owner:'player', lifetime:0, maxLifetime:90, homing:false, homingTarget:null, trail:[], });
 const makeParticle = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, color:'#fff', alpha:1, size:2, life:1, maxLife:1, active:false, type:'dot', });
@@ -213,11 +229,7 @@ const makeDrone = () => ({ pos:{x:0,y:0}, angle:0, orbitAngle:0, shootCooldown:0
 const makeChest = () => ({ pos:{x:0,y:0}, vel:{x:0,y:0}, tier:'COMMON_CACHE', radius:20, active:false, pulse:0, spin:0, opened:false, });
 
 
-const BOSSES = [
-  { name:'Asteroid Titan', color:'#92400e', accent:'#fbbf24', radius:55, hpBase:800, xpDrop:500, goldDrop:300, chestTier: 'RARE_CRATE', equipRarities: ['common','uncommon','rare'], phases:[ { hpThresh:1.0, attacks:['boulder_throw','orbit_rocks'],  speed:1.2, fireRate:90  }, { hpThresh:0.5, attacks:['boulder_throw','laser_sweep'],  speed:1.8, fireRate:60  }, { hpThresh:0.2, attacks:['rapid_fire','laser_sweep'],     speed:2.2, fireRate:35  } ] },
-  { name:'Void Serpent', color:'#4c1d95', accent:'#a855f7', radius:45, hpBase:650, xpDrop:600, goldDrop:350, chestTier: 'ELITE_ARSENAL', equipRarities: ['uncommon','rare','epic'], phases:[ { hpThresh:1.0, attacks:['plasma_breath','teleport'],      speed:2.0, fireRate:75  }, { hpThresh:0.4, attacks:['plasma_breath','homing_burst'], speed:2.8, fireRate:45  } ] },
-  { name:'Galactic Destroyer', color:'#1e3a5f', accent:'#38bdf8', radius:65, hpBase:1200, xpDrop:700, goldDrop:500, chestTier: 'MYTHIC_RELIC', equipRarities: ['rare','epic','legendary'], phases:[ { hpThresh:1.0, attacks:['satellite_swarm','laser_sweep'], speed:1.0, fireRate:100 }, { hpThresh:0.6, attacks:['rapid_fire','laser_sweep'],        speed:1.5, fireRate:55  }, { hpThresh:0.25,attacks:['rapid_fire','ram_charge'],        speed:2.5, fireRate:30  } ] },
-];
+// Boss definitions are now imported from systems/BossData.js as BOSS_DEFS
 
 export class GameEngine {
   constructor(canvas, onStateChange, audio) {
@@ -243,8 +255,19 @@ export class GameEngine {
     this.touchAimPos = { x: 0, y: 0 };
     this.bossesKilledThisRun = 0;
     this.equipmentBonuses = null;
+    this.metaStats        = {};  // from tech tree + pet + prestige + shop, set by page.js
+    this.shopManager      = null;
+    this.modeRules        = getModeRules('classic');
+    this.modeState        = getModeInitialState('classic');
+    this.sessionRubies    = 0;   // rubies earned this run
+    this.runKillStats     = {    // tracked for missions/achievements
+      kills: 0, elites: 0, bosses: 0, crits: 0,
+      gold: 0, gear: 0, abilities: 0, shopBuys: 0,
+    };
     this.runLootCollected = [];
     this.runLootCount = 0;
+    this.waveDirector = new WaveDirector();
+    this.usedBossIds  = new Set();
     this.secretRunStats = {
       uniqueBossesKilled: new Set(),
       bossKilledAtLowHP: false,
@@ -440,13 +463,53 @@ export class GameEngine {
     this.runAbilityLoot   = [];
     this.runLootCount = 0;
     this.secretRunStats = { uniqueBossesKilled: new Set(), bossKilledAtLowHP: false, lootCollected: 0 };
+    this.waveDirector = new WaveDirector();
+    this.usedBossIds  = new Set();
     this.activeEvent  = null;
     this.nextEventTime= rand(60,120);
-    
-    if (mode==='speed')    { this.player.xpMult=3; this.player.goldMult=3; this.spawnInterval=60; }
-    if (mode==='hardcore') { this.player.maxHp=60; this.player.hp=60; }
-    if (mode==='boss')     { this.nextBossTime=30; }
-    this.nextBossTime = mode==='boss' ? 30 : 300;
+    this.sessionRubies = 0;
+    this.runKillStats  = { kills: 0, elites: 0, bosses: 0, crits: 0, gold: 0, gear: 0, abilities: 0, shopBuys: 0 };
+
+    // ── Game Mode setup ───────────────────────────────────────────────────
+    this.modeRules = getModeRules(mode);
+    this.modeState = getModeInitialState(mode);
+    const bossInterval = this.modeRules.bossInterval ?? 60; // in seconds (sessionTime is also seconds)
+    this.nextBossTime  = bossInterval;
+
+    // ── Shop Manager ────────────────────────────────────────────────────
+    if (this.shopManager) {
+      this.shopManager.sessionMinutes = 0;
+      this.shopManager._refresh();
+    } else {
+      this.shopManager = new ShopManager({});
+    }
+
+    // Apply meta stats (tech tree + pet + prestige) to player
+    const ms = this.metaStats || {};
+    if (this.player) {
+      if (ms.damageMult)         this.player.damageMult        = (this.player.damageMult || 1)        + ms.damageMult;
+      if (ms.maxHpBonus)        { this.player.maxHp            += ms.maxHpBonus; this.player.hp = this.player.maxHp; }
+      if (ms.shieldCapBonus)     this.player.shieldMax         = (this.player.shieldMax || 0)          + ms.shieldCapBonus;
+      if (ms.shieldRegenBonus)   this.player.shieldRegen       = (this.player.shieldRegen || 0)        + ms.shieldRegenBonus;
+      if (ms.moveSpeedMult)      this.player.speed             = (this.player.speed || 3)             * (1 + ms.moveSpeedMult);
+      if (ms.xpMult)             this.player.xpMult            = (this.player.xpMult || 1)            * (1 + ms.xpMult);
+      if (ms.goldMult)           this.player.goldMult          = (this.player.goldMult || 1)           * (1 + ms.goldMult);
+      if (ms.critChance)         this.player.critChance        = (this.player.critChance || 0)         + ms.critChance;
+      if (ms.critDamageMult)     this.player.critDamageMult    = (this.player.critDamageMult || 1.5)   + ms.critDamageMult;
+      if (ms.abilityPowerMult)   this.player.abilityPower      = (this.player.abilityPower || 1)       + ms.abilityPowerMult;
+      if (ms.cooldownReduction)  this.player.cooldownReduction = (this.player.cooldownReduction || 0)  + ms.cooldownReduction;
+      if (ms.droneDamageMult)    this.player.droneDamageMult   = (this.player.droneDamageMult || 1)    + ms.droneDamageMult;
+      if (ms.droneCountBonus)    this.player.drones            = (this.player.drones || 0)             + Math.floor(ms.droneCountBonus);
+      // Apply shop stats too
+      const ss = this.shopManager.getStats();
+      if (ss.damageMult)         this.player.damageMult        = (this.player.damageMult || 1)        + ss.damageMult;
+      if (ss.maxHpBonus)        { this.player.maxHp            += ss.maxHpBonus; this.player.hp = Math.min(this.player.hp + ss.maxHpBonus, this.player.maxHp); }
+      if (ss.shieldCapBonus)     this.player.shieldMax         = (this.player.shieldMax || 0)          + ss.shieldCapBonus;
+    }
+
+    // Apply mode multipliers to player economy
+    if (this.modeRules.xpMult   && this.modeRules.xpMult   !== 1) this.player.xpMult   = (this.player.xpMult   || 1) * this.modeRules.xpMult;
+    if (this.modeRules.goldMult && this.modeRules.goldMult !== 1) this.player.goldMult  = (this.player.goldMult || 1) * this.modeRules.goldMult;
 
     // Apply Gear Hangar loadout bonuses to player
     if (this.equipmentBonuses) {
@@ -497,6 +560,11 @@ export class GameEngine {
     this._updateSpawning(dt);
     this._updateEvents(dt);
     this._updateWave(dt);
+    // Tick shop manager (convert dt frames→seconds: 1 tick ≈ 1/60s)
+    if (this.shopManager) {
+      const refreshed = this.shopManager.tick(dt / 60, this.sessionTime / 60);
+      if (refreshed) this.onStateChange({ shopRefreshed: true });
+    }
     this._syncUI();
   }
 
@@ -634,43 +702,76 @@ export class GameEngine {
   _updateEnemies(dt) {
     const p = this.player; if (!p || p.dead) return;
     this.enemies = this.enemies.filter(e => e.active);
-    this.enemies.forEach(e => {
-      if (e.spawnFlash>0) { e.spawnFlash-=dt; return; }
-      const dx = p.pos.x - e.pos.x; const dy = p.pos.y - e.pos.y; const dist = Math.sqrt(dx*dx+dy*dy)||1;
-      e.angle = Math.atan2(dy,dx); if (e.flash>0) e.flash-=dt;
-      const nx = dx/dist; const ny = dy/dist;
+    const sessionMinutes = this.sessionTime / 60;
 
-      if (e.type === 'drone') {
-        e.vel.x = (e.vel.x + nx*e.speed*0.3*dt)*0.9; e.vel.y = (e.vel.y + ny*e.speed*0.3*dt)*0.9;
-        if (e.shootCooldown<=0 && dist<250) { this._enemyShoot(e, {x:nx,y:ny}, 5, 4); e.shootCooldown = e.fireRate; } else { e.shootCooldown-=dt; }
-      } else if (e.type === 'kamikaze') {
-        e.vel.x = (e.vel.x + nx*e.speed*0.5*dt)*0.95; e.vel.y = (e.vel.y + ny*e.speed*0.5*dt)*0.95;
-      } else if (e.type === 'tank') {
-        e.vel.x = (e.vel.x + nx*e.speed*0.15*dt)*0.88; e.vel.y = (e.vel.y + ny*e.speed*0.15*dt)*0.88;
-        if (e.shootCooldown<=0 && dist<400) { this._enemyShoot(e, {x:nx,y:ny}, 18, 3); e.shootCooldown = e.fireRate; } else { e.shootCooldown-=dt; }
-      } else if (e.type === 'sniper') {
-        const factor = dist > 300 ? 0.2 : -0.1; e.vel.x = (e.vel.x + nx*e.speed*factor*dt)*0.92; e.vel.y = (e.vel.y + ny*e.speed*factor*dt)*0.92;
-        if (e.shootCooldown<=0 && dist<500) { this._enemyShoot(e, {x:nx,y:ny}, 25, 6); e.shootCooldown = e.fireRate; } else { e.shootCooldown-=dt; }
-      } else if (e.type === 'swarm') {
-        e.vel.x = (e.vel.x + nx*e.speed*0.45*dt)*0.92; e.vel.y = (e.vel.y + ny*e.speed*0.45*dt)*0.92;
-        this.enemies.forEach(o=>{
-          if(o!==e && o.type==='swarm') {
-            const sd=V.dist(e.pos,o.pos);
-            if(sd<25&&sd>0){ const sn=V.norm(V.sub(e.pos,o.pos)); e.vel.x+=sn.x*2*dt; e.vel.y+=sn.y*2*dt; }
+    this.enemies.forEach(e => {
+      if (e.spawnFlash > 0) { e.spawnFlash -= dt; return; }
+
+      updateEnemyAI(
+        e, p, dt, this.tick,
+        // enemyShootFn: (src, dir, dmg?, spd?, color?, radius?, lifetime?)
+        (src, dir, dmg, spd, color, radius, lifetime) => {
+          this._enemyShoot(src, dir, dmg, spd, color, radius, lifetime);
+        },
+        // spawnFighterFn: carrier spawns child drones
+        (type, pos) => {
+          const child = makeEnemy();
+          configureEnemy(child, type, this.wave, p.pos, sessionMinutes);
+          child.pos = { x: pos.x, y: pos.y };
+          this.enemies.push(child);
+        }
+      );
+
+      // Swarm separation
+      if (e.behavior === 'swarm' && e.active) {
+        this.enemies.forEach(o => {
+          if (o !== e && o.behavior === 'swarm' && o.active) {
+            const sd = V.dist(e.pos, o.pos);
+            if (sd < 25 && sd > 0) {
+              const sn = V.norm(V.sub(e.pos, o.pos));
+              e.vel.x += sn.x * 2 * dt;
+              e.vel.y += sn.y * 2 * dt;
+            }
           }
         });
       }
-      e.pos.x += e.vel.x*dt; e.pos.y += e.vel.y*dt;
-      if (dist < e.radius + p.radius && !p.invuln) {
-        this._damagePlayer(e.damage); this.audio.damage();
-        if (e.type==='kamikaze') { this._spawnParticles(e.pos, e.color, 12, 3, 20); this._killEnemy(e); }
+
+      // Contact damage
+      if (!p.invuln && V.dist(e.pos, p.pos) < e.radius + p.radius) {
+        this._damagePlayer(e.damage);
+        this.audio.damage();
+        // Dash types detonate on contact
+        if (e.behavior === 'chase_fast') {
+          this._spawnParticles(e.pos, e.color, 12, 3, 20);
+          this._killEnemy(e);
+        }
+      }
+
+      // Leash: pull runaway enemies back toward the player so they can't escape off-screen
+      const leashDist = 1400;
+      if (V.dist(e.pos, p.pos) > leashDist) {
+        const angle = Math.random() * Math.PI * 2;
+        const spawnDist = 600 + Math.random() * 200;
+        e.pos = {
+          x: p.pos.x + Math.cos(angle) * spawnDist,
+          y: p.pos.y + Math.sin(angle) * spawnDist,
+        };
+        e.vel = { x: 0, y: 0 };
+        e.spawnFlash = 15; // brief flash on re-entry
       }
     });
   }
 
-  _enemyShoot(e, dir, damage, speed) {
-    const b = this.bullets.get(); b.active=true; b.owner='enemy'; b.pos={x:e.pos.x,y:e.pos.y};
-    b.vel={x:dir.x*speed, y:dir.y*speed}; b.damage=damage; b.radius=5; b.color='#f87171'; b.pierce=0; b.maxLifetime=70; b.lifetime=0;
+  _enemyShoot(e, dir, damage, speed, color, radius, lifetime) {
+    const b = this.bullets.get();
+    b.active = true; b.owner = 'enemy';
+    b.pos = { x: e.pos.x, y: e.pos.y };
+    b.vel = { x: dir.x * (speed || 5), y: dir.y * (speed || 5) };
+    b.damage = damage || e.damage || 10;
+    b.radius = radius || 5;
+    b.color  = color  || '#f87171';
+    b.pierce = 0; b.maxLifetime = lifetime || 70; b.lifetime = 0;
+    b.trail  = [];
   }
 
   _killEnemy(e) {
@@ -678,18 +779,35 @@ export class GameEngine {
     e.active = false;
     this.player.kills++;
     this.player.killCount = (this.player.killCount || 0) + 1;
-    const xpGain = Math.floor(e.xpDrop * this.player.xpMult);
-    const goldGain = Math.floor(e.goldDrop * this.player.goldMult);
+    this.runKillStats.kills++;
+
+    const xpGain   = Math.floor(e.xpDrop   * this.player.xpMult);
+    const goldGain  = Math.floor(e.goldDrop  * this.player.goldMult);
+    this.runKillStats.gold += goldGain;
     this._spawnLoot(e.pos, xpGain, goldGain);
     this._spawnParticles(e.pos, e.color, 12, 3, 20);
     this.audio.explosion(); this.player.score += e.xpDrop; this._grantXP(xpGain);
+
+    // Ruby drops from elite enemies
+    if (e.isElite) {
+      this.runKillStats.elites++;
+      const rubyMult = (this.modeRules.rubyDropMult || 1) * (1 + (this.metaStats?.rubyDropMult || 0));
+      const rubies = rollRubyDrop('elite_boss', rubyMult);
+      if (rubies > 0) {
+        this.sessionRubies += rubies;
+        this.onStateChange({ rubyPickup: rubies });
+        setTimeout(() => this.onStateChange({ rubyPickup: null }), 1200);
+      }
+    }
   }
 
   _updateBoss(dt) {
     const b = this.boss;
     if (!b || !b.active) {
       if (this.sessionTime >= this.nextBossTime && !this.boss) {
-        this._spawnBoss(); this.nextBossTime += this.mode==='boss' ? 60 : 300;
+        this._spawnBoss();
+        const interval = this.modeRules.bossInterval ?? 60; // seconds
+        this.nextBossTime += interval;
       }
       return;
     }
@@ -698,12 +816,22 @@ export class GameEngine {
 
     const hpPct = b.hp/b.maxHp; let newPhase = 0;
     for (let i=this.bossData.phases.length-1;i>=0;i--) { if (hpPct <= this.bossData.phases[i].hpThresh) { newPhase=i; break; } }
-    if (newPhase>this.bossPhase) { this.bossPhase = newPhase; this.shake = 12; this._spawnParticles(b.pos, this.bossData.accent, 30, 5, 40); }
+    if (newPhase > this.bossPhase) {
+      this.bossPhase = newPhase;
+      this.shake = 12;
+      this._spawnParticles(b.pos, this.bossData.accent, 30, 5, 40);
+      const phaseData = this.bossData.phases[newPhase];
+      if (phaseData?.announceText) {
+        this.onStateChange({ bossPhaseAlert: phaseData.announceText });
+        setTimeout(() => this.onStateChange({ bossPhaseAlert: null }), 3000);
+      }
+    }
 
     const phase = this.bossData.phases[this.bossPhase]; const dx = p.pos.x-b.pos.x, dy=p.pos.y-b.pos.y; const dist = Math.sqrt(dx*dx+dy*dy)||1;
     const nx=dx/dist, ny=dy/dist; const spd = phase.speed;
 
     b.angle += 0.005*dt*spd;
+    if (b.laserAngle !== undefined) b.laserAngle += 0.015 * dt * spd;
     if (dist > 310) { b.vel.x += nx*spd*0.3*dt; b.vel.y += ny*spd*0.3*dt; }
     else if (dist < 250) { b.vel.x -= nx*spd*0.2*dt; b.vel.y -= ny*spd*0.2*dt; }
     else { b.vel.x += Math.cos(b.angle)*spd*0.2*dt; b.vel.y += Math.sin(b.angle)*spd*0.2*dt; }
@@ -767,18 +895,108 @@ export class GameEngine {
         bullet.pos={x:b.pos.x+Math.cos(a)*(b.radius+30), y:b.pos.y+Math.sin(a)*(b.radius+30)}; const tangent = a+Math.PI/2;
         bullet.vel={x:Math.cos(tangent)*3, y:Math.sin(tangent)*3}; bullet.damage=14; bullet.radius=7; bullet.color='#78716c'; bullet.maxLifetime=110; bullet.lifetime=0;
       }
+
+    // ── NEW boss attack types ─────────────────────────────────────────────────
+
+    } else if (attack === 'spawn_swarm') {
+      const sessionMinutes = this.sessionTime / 60;
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * TAU;
+        const child = makeEnemy();
+        configureEnemy(child, 'drone_swarm', this.wave, this.player.pos, sessionMinutes);
+        child.pos = { x: b.pos.x + Math.cos(a) * b.radius, y: b.pos.y + Math.sin(a) * b.radius };
+        this.enemies.push(child);
+      }
+
+    } else if (attack === 'rage_swarm') {
+      const sessionMinutes = this.sessionTime / 60;
+      for (let i = 0; i < 8; i++) {
+        const a = rand(0, TAU);
+        const child = makeEnemy();
+        configureEnemy(child, 'drone_swarm', this.wave, this.player.pos, sessionMinutes);
+        child.pos = { x: b.pos.x + Math.cos(a) * (b.radius + 20), y: b.pos.y + Math.sin(a) * (b.radius + 20) };
+        this.enemies.push(child);
+      }
+
+    } else if (attack === 'acid_spray') {
+      for (let i = 0; i < 8; i++) {
+        const bullet = this.bullets.get(); bullet.active = true; bullet.owner = 'boss'; bullet.pos = V.copy(b.pos);
+        const a = Math.atan2(ny, nx) + rand(-0.55, 0.55);
+        bullet.vel = { x: Math.cos(a) * 6, y: Math.sin(a) * 6 };
+        bullet.damage = 18; bullet.radius = 6; bullet.color = '#86efac'; bullet.maxLifetime = 85; bullet.lifetime = 0;
+      }
+
+    } else if (attack === 'rotating_laser') {
+      if (b.laserAngle === undefined) b.laserAngle = 0;
+      for (let i = 0; i < 2; i++) {
+        const bullet = this.bullets.get(); bullet.active = true; bullet.owner = 'boss'; bullet.pos = V.copy(b.pos);
+        const a = b.laserAngle + i * Math.PI;
+        bullet.vel = { x: Math.cos(a) * 10, y: Math.sin(a) * 10 };
+        bullet.damage = 20; bullet.radius = 5; bullet.color = '#7dd3fc'; bullet.maxLifetime = 70; bullet.lifetime = 0;
+      }
+
+    } else if (attack === 'dual_laser') {
+      if (b.laserAngle === undefined) b.laserAngle = 0;
+      for (let i = 0; i < 4; i++) {
+        const bullet = this.bullets.get(); bullet.active = true; bullet.owner = 'boss'; bullet.pos = V.copy(b.pos);
+        const a = b.laserAngle + (i * Math.PI / 2);
+        bullet.vel = { x: Math.cos(a) * 11, y: Math.sin(a) * 11 };
+        bullet.damage = 22; bullet.radius = 5; bullet.color = '#38bdf8'; bullet.maxLifetime = 65; bullet.lifetime = 0;
+      }
+
+    } else if (attack === 'shockwave') {
+      for (let i = 0; i < 16; i++) {
+        const bullet = this.bullets.get(); bullet.active = true; bullet.owner = 'boss';
+        const a = (i / 16) * TAU;
+        bullet.pos = { x: b.pos.x + Math.cos(a) * b.radius, y: b.pos.y + Math.sin(a) * b.radius };
+        bullet.vel = { x: Math.cos(a) * 8, y: Math.sin(a) * 8 };
+        bullet.damage = 25; bullet.radius = 8; bullet.color = '#fbbf24'; bullet.maxLifetime = 60; bullet.lifetime = 0;
+      }
+      this.shake = 8;
+
+    } else if (attack === 'black_hole_pull') {
+      // Pull player toward boss
+      const pullDir = V.norm(V.sub(b.pos, p.pos));
+      p.vel.x += pullDir.x * 8;
+      p.vel.y += pullDir.y * 8;
+      // Visualize pull
+      this._spawnParticles(b.pos, '#f43f5e', 15, 8, 30);
+
+    } else if (attack === 'projectile_storm') {
+      for (let i = 0; i < 20; i++) {
+        const bullet = this.bullets.get(); bullet.active = true; bullet.owner = 'boss';
+        const a = (i / 20) * TAU + this.tick * 0.02;
+        bullet.pos = { x: b.pos.x + Math.cos(a) * b.radius, y: b.pos.y + Math.sin(a) * b.radius };
+        bullet.vel = { x: Math.cos(a) * 7, y: Math.sin(a) * 7 };
+        bullet.damage = 14; bullet.radius = 4; bullet.color = '#f43f5e'; bullet.maxLifetime = 80; bullet.lifetime = 0;
+      }
+      this.shake = 6;
     }
   }
 
   _spawnBoss() {
-    const data = BOSSES[randInt(0, BOSSES.length-1)]; const angle= rand(0,TAU); const waveScale = 1 + (this.wave-1)*0.15;
+    const sessionMinutes = this.sessionTime / 60;
+    const data = selectBoss(sessionMinutes, this.bossesKilledThisRun, this.usedBossIds);
+    const scaledHp = scaleBossHp(data, this.wave, sessionMinutes);
+    const angle = rand(0, TAU);
     this.boss = {
-      pos: {x:this.player.pos.x+Math.cos(angle)*500, y:this.player.pos.y+Math.sin(angle)*500}, vel: V.zero(),
-      hp: data.hpBase * waveScale, maxHp: data.hpBase * waveScale, angle: 0, radius: data.radius, flash: 0, active: true, spawnFlash: 60,
+      pos: { x: this.player.pos.x + Math.cos(angle) * 500, y: this.player.pos.y + Math.sin(angle) * 500 },
+      vel: V.zero(),
+      hp: scaledHp, maxHp: scaledHp,
+      angle: 0, radius: data.radius,
+      flash: 0, active: true, spawnFlash: 60,
+      laserAngle: 0, pullStrength: 0,
     };
-    this.bossData = data; this.bossPhase = 0; this.bossAttackTimer = 120; this.bossAttackIdx = 0; this.shake = 15;
-    this.audio.bossAppear(); this._spawnParticles(this.boss.pos, data.accent, 40, 6, 60);
-    this.onStateChange({bossName: data.name, bossAlert: true}); setTimeout(()=>this.onStateChange({bossAlert:false}), 3000);
+    this.bossData      = data;
+    this.bossPhase     = 0;
+    this.bossAttackTimer = 120;
+    this.bossAttackIdx   = 0;
+    this.usedBossIds.add(data.id);
+    this.shake = 15;
+    this.audio.bossAppear();
+    this._spawnParticles(this.boss.pos, data.accent, 40, 6, 60);
+    this.onStateChange({ bossName: data.name, bossAlert: true });
+    setTimeout(() => this.onStateChange({ bossAlert: false }), 3500);
   }
 
   _killBoss() {
@@ -793,7 +1011,11 @@ export class GameEngine {
     if (bossHpWasLow) this.secretRunStats.bossKilledAtLowHP = true;
 
     this._spawnLoot(bossPos, this.bossData.xpDrop, this.bossData.goldDrop);
-    this._spawnChest(bossPos, this.bossData.chestTier);
+    // Raid mode gets upgraded chest; world boss gets cosmic vault
+    const chestTierOverride = this.modeRules?.raidMode ? 'RAID_CHEST'
+                            : this.modeRules?.worldBossMode ? 'COSMIC_VAULT'
+                            : this.bossData.chestTier;
+    this._spawnChest(bossPos, chestTierOverride || this.bossData.chestTier);
 
     // Spawn equipment drops
     const items = spawnBossEquipmentDrops(
@@ -822,6 +1044,18 @@ export class GameEngine {
     this.audio.explosion();
     this.player.score += this.bossData.xpDrop * 5;
     this._grantXP(this.bossData.xpDrop * this.player.xpMult);
+
+    // Ruby drops from boss kill
+    this.runKillStats.bosses++;
+    const bossRubyType = this.modeRules.raidMode ? 'raid_boss' : 'regular_boss';
+    const rubyMult = (this.modeRules.rubyDropMult || 1) * (1 + (this.metaStats?.rubyDropMult || 0));
+    const bossRubies = rollRubyDrop(bossRubyType, rubyMult);
+    if (bossRubies > 0) {
+      this.sessionRubies += bossRubies;
+      this.onStateChange({ rubyPickup: bossRubies });
+      setTimeout(() => this.onStateChange({ rubyPickup: null }), 2000);
+    }
+
     this.boss.active = false;
     this.boss = null;
     this.bossData = null;
@@ -870,6 +1104,13 @@ export class GameEngine {
     this.running  = false;
     const loot        = [...(this.runLootCollected || [])];
     const abilityLoot = [...(this.runAbilityLoot   || [])];
+    const sessionMinutes = this.sessionTime / 60;
+    // Account XP for this run
+    const accountXPEarned =
+      this.runKillStats.bosses * 150 +
+      this.runKillStats.elites * 30  +
+      Math.floor(sessionMinutes * 20)  +
+      200; // run completion bonus
     setTimeout(() => {
       this.onStateChange({
         gameOver: true,
@@ -883,6 +1124,12 @@ export class GameEngine {
         finalXP:           this.player ? Math.floor(this.player.xp)   : 0,
         runLoot:           loot,
         runAbilityLoot:    abilityLoot,
+        // New fields for meta progression
+        finalRubies:       this.sessionRubies,
+        finalAccountXP:    accountXPEarned,
+        finalMode:         this.mode,
+        runKillStats:      { ...this.runKillStats },
+        runMinutes:        Math.floor(sessionMinutes),
       });
     }, 500);
   }
@@ -923,7 +1170,9 @@ export class GameEngine {
     chest.pulse = 0;
     chest.spin = 0;
     chest.opened = false;
-    this._spawnParticles(chest.pos, CHEST_TIERS[tierKey].color, 20, 3, 30);
+    const tierDef = CHEST_TIERS[tierKey] || CHEST_TIERS.RARE_CRATE;
+    chest.tier = tierDef === CHEST_TIERS[tierKey] ? tierKey : 'RARE_CRATE';
+    this._spawnParticles(chest.pos, tierDef.color, 20, 3, 30);
   }
 
   // _spawnEquipmentDrop replaced by EquipmentDropSystem.spawnBossEquipmentDrops
@@ -951,33 +1200,72 @@ export class GameEngine {
     chest.opened = true;
     const tier = CHEST_TIERS[chest.tier];
     const rewards = tier.rewards;
-    
+
     const coins = randInt(rewards.coins[0], rewards.coins[1]);
-    const xp = randInt(rewards.xp[0], rewards.xp[1]);
-    
+    const xp    = randInt(rewards.xp[0],   rewards.xp[1]);
+
     this.player.gold += coins;
     this._grantXP(xp);
-    
+
+    // Ruby drops from chests
+    const rubyMult   = (this.modeRules?.rubyDropMult || 1) * (1 + (this.metaStats?.rubyDropMult || 0));
+    const lootQual   = (this.player?.lootQuality || 0) + (this.metaStats?.lootQuality || 0);
+    const chestId    = chest.chestSystemId || this._tierKeyToChestId(chest.tier);
+    const chestRewards = generateChestRewards(chestId, { lootQuality: lootQual, rubyMult });
+
+    if (chestRewards.rubies > 0) {
+      this.sessionRubies += chestRewards.rubies;
+      this.onStateChange({ rubyPickup: chestRewards.rubies });
+      setTimeout(() => this.onStateChange({ rubyPickup: null }), 2000);
+    }
+
+    // Track chest opened for achievements
+    this.runKillStats.chests = (this.runKillStats.chests || 0) + 1;
+
+    // Equipment drop
     if (Math.random() < rewards.equipChance) {
       spawnChestEquipmentDrop(
         this.equipDrops, chest.pos, this.wave,
         (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
       );
     }
-    
+
+    // Ability drop
     if (Math.random() < rewards.abilityChance) {
-      const abilityKeys = Object.keys(ABILITIES);
-      const randomAbility = ABILITIES[abilityKeys[randInt(0, abilityKeys.length - 1)]];
-      this.onStateChange({ abilityUnlocked: randomAbility });
+      spawnChestAbilityDrop(
+        this.abilityDrops, chest.pos, this.wave,
+        (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+      );
     }
-    
+
+    // Signal chest opened to UI (for animation screen)
+    this.onStateChange({
+      chestOpened: {
+        type: chestId,
+        rewards: { gold: coins, xp, rubies: chestRewards.rubies, items: chestRewards.items },
+        id: Date.now(),
+      }
+    });
+    setTimeout(() => this.onStateChange({ chestOpened: null }), 200);
+
     this._spawnParticles(chest.pos, tier.color, 40, 5, 50);
     this.audio.powerup();
     this.shake = 5;
-    
-    setTimeout(() => {
-      this.chests.release(chest);
-    }, 100);
+
+    setTimeout(() => { this.chests.release(chest); }, 100);
+  }
+
+  /** Map internal CHEST_TIERS key → ChestSystem id */
+  _tierKeyToChestId(tierKey) {
+    const map = {
+      COMMON_CACHE:  'common_cache',
+      RARE_CRATE:    'rare_crate',
+      ELITE_ARSENAL: 'elite_arsenal',
+      MYTHIC_RELIC:  'mythic_relic',
+      COSMIC_VAULT:  'cosmic_vault',
+      RAID_CHEST:    'raid_chest',
+    };
+    return map[tierKey] ?? 'common_cache';
   }
 
   _updateEquipmentDrops(dt) {
@@ -1167,24 +1455,35 @@ export class GameEngine {
     }
   }
 
-  _updateWave(dt) { this.waveTimer += dt; if (this.waveTimer >= 1800) { this.wave++; this.waveTimer=0; this.spawnInterval = Math.max(40, 120 - this.wave*8); } }
-  _updateSpawning(dt) { this.spawnTimer += dt; if (this.spawnTimer >= this.spawnInterval) { this.spawnTimer=0; const count = 1 + Math.floor(this.wave/3); for (let i=0;i<count;i++) this._spawnEnemy(); } }
+  _updateWave(dt) {
+    this.waveTimer += dt;
+    if (this.waveTimer >= 1800) { this.wave++; this.waveTimer = 0; }
+  }
 
-  _spawnEnemy() {
-    if (!this.player) return; const waveScale = 1 + (this.wave-1)*0.12; const angle = rand(0,TAU); const dist = rand(400,600);
-    const pos = {x:this.player.pos.x+Math.cos(angle)*dist, y:this.player.pos.y+Math.sin(angle)*dist};
-    let types=['drone']; if (this.wave>=2) types.push('drone','kamikaze'); if (this.wave>=3) types.push('drone','tank'); if (this.wave>=4) types.push('sniper'); if (this.wave>=5) types.push('swarm','swarm');
-    const type=types[randInt(0,types.length-1)];
+  _updateSpawning(dt) {
+    if (!this.player) return;
+    const sessionMinutes = this.sessionTime / 60;
+    const toSpawn = this.waveDirector.update(
+      dt, sessionMinutes, this.wave,
+      this.enemies.filter(e => e.active).length,
+      this.player.pos
+    );
+    toSpawn.forEach(spawn => {
+      const e = makeEnemy();
+      configureEnemy(e, spawn.type, this.wave, this.player.pos, sessionMinutes);
+      if (spawn.pos) { e.pos = { x: spawn.pos.x, y: spawn.pos.y }; }
+      this.enemies.push(e);
+    });
+  }
 
-    const configs = {
-      drone:     { hp:20,  radius:12, speed:1.5, damage:8,  xpDrop:10, goldDrop:5,  color:'#ef4444', glowColor:'#ef444466', fireRate:90  },
-      kamikaze: { hp:12,  radius:10, speed:2.8, damage:18, xpDrop:15, goldDrop:8,  color:'#f97316', glowColor:'#f9731666', fireRate:0   },
-      tank:     { hp:80,  radius:20, speed:0.8, damage:15, xpDrop:40, goldDrop:25, color:'#6b7280', glowColor:'#6b728066', fireRate:75  },
-      sniper:   { hp:30,  radius:13, speed:1.2, damage:28, xpDrop:30, goldDrop:15, color:'#8b5cf6', glowColor:'#8b5cf666', fireRate:130 },
-      swarm:     { hp:8,   radius:8,  speed:2.2, damage:5,  xpDrop:6,  goldDrop:3,  color:'#facc15', glowColor:'#facc1566', fireRate:0   },
-    };
-    const cfg = configs[type]; const e = makeEnemy();
-    Object.assign(e, { pos, vel:{x:0,y:0}, angle:0, hp: cfg.hp * waveScale, maxHp: cfg.hp * waveScale, radius:cfg.radius, type, color:cfg.color, glowColor:cfg.glowColor, speed:cfg.speed, damage:cfg.damage*(0.8+this.wave*0.1), xpDrop:cfg.xpDrop, goldDrop:cfg.goldDrop, fireRate:cfg.fireRate, shootCooldown:cfg.fireRate, active:true, flash:0, spawnFlash:30, });
+  // Used by event system (_triggerEvent) for ad-hoc spawns
+  _spawnEnemy(typeOverride) {
+    if (!this.player) return;
+    const sessionMinutes = this.sessionTime / 60;
+    const eventTypes = ['fighter', 'scout', 'interceptor', 'ufo_scout'];
+    const type = typeOverride || eventTypes[randInt(0, eventTypes.length - 1)];
+    const e = makeEnemy();
+    configureEnemy(e, type, this.wave, this.player.pos, sessionMinutes);
     this.enemies.push(e);
   }
 
@@ -1199,7 +1498,15 @@ export class GameEngine {
     if (evt === 'meteor_shower') {
       for (let i=0;i<8;i++) setTimeout(()=>{
         if (!this.player||this.player.dead) return;
-        const e=makeEnemy(); Object.assign(e,{pos:{x:this.player.pos.x+rand(-400,400),y:this.player.pos.y-500}, vel:{x:rand(-1,1),y:rand(5,8)},hp:30,maxHp:30,radius:15,type:'kamikaze',color:'#9ca3af',glowColor:'#9ca3af66',speed:0,damage:20,xpDrop:20,goldDrop:12,fireRate:0,shootCooldown:999,active:true,flash:0,spawnFlash:0}); this.enemies.push(e);
+        const e=makeEnemy();
+        const sessionMinutes = this.sessionTime / 60;
+        configureEnemy(e, 'interceptor', this.wave, this.player.pos, sessionMinutes);
+        // Override position to drop from above
+        e.pos = { x: this.player.pos.x + rand(-400, 400), y: this.player.pos.y - 500 };
+        e.vel = { x: rand(-1, 1), y: rand(5, 8) };
+        e.behavior = 'chase_fast'; // fast direct descent
+        e.spawnFlash = 0;
+        this.enemies.push(e);
       },i*500);
     } else if (evt === 'gold_rush' && this.player) {
       this.player.goldMult *= 2; setTimeout(()=>{ if(this.player) this.player.goldMult /= 2; }, 60000);
@@ -1222,7 +1529,13 @@ export class GameEngine {
     this.paused = !this.paused;
     this.onStateChange({ paused: this.paused });
   }
-  resume() { if (this.paused) this._togglePause(); }
+  pause()  { if (!this.paused) this._togglePause(); }
+  resume() { if (this.paused)  this._togglePause(); }
+  quitGame() {
+    // Called from "Leave Game" in pause menu — run normal end-game flow so loot is awarded
+    if (this.paused) { this.paused = false; }
+    this._endGame(false);
+  }
   applyUpgrade(upgradeId) {
     const upgrade = UPGRADES.find(u=>u.id===upgradeId); if (!upgrade||!this.player||this.player.gold < upgrade.cost) return;
     this.player.gold -= upgrade.cost; upgrade.apply(this.player); this.purchasedItems.push(upgradeId); this.audio.purchase(); this._syncUI();
@@ -1237,14 +1550,89 @@ export class GameEngine {
       godMachineActive: this.player._godMachineActive || false,
       lastSignalActive: this.player._lastSignalActive || false,
       temporalAnchorReady: this.player._temporalAnchorState === 'recording',
+      // Meta / shop
+      sessionRubies: this.sessionRubies,
+      shopTimer:     this.shopManager ? this.shopManager.getTimerDisplay() : 25,
+      shopSlots:     this.shopManager ? this.shopManager.getSlots() : [],
+      modeId:        this.mode,
     });
   }
 
+  // ── Public API for page.js ─────────────────────────────────────────────────
+
+  /** Inject meta stats before calling startGame(). */
+  setMetaStats(metaStats) {
+    this.metaStats = metaStats || {};
+  }
+
+  /** Inject a pre-configured ShopManager (with persisted ranks). */
+  setShopManager(manager) {
+    this.shopManager = manager;
+  }
+
+  /** Purchase a slot from the in-game upgrade shop. Returns result from ShopManager. */
+  purchaseShopUpgrade(slotIndex) {
+    if (!this.shopManager || !this.player) return { success: false };
+    const result = this.shopManager.purchase(slotIndex, Math.floor(this.player.gold));
+    if (result.success) {
+      this.player.gold = result.newGold;
+      this.runKillStats.shopBuys++;
+      // Apply the stat immediately to the player
+      const stat = result.stat;
+      const gain = result.gainedAmount;
+      this._applyShopStatToPlayer(stat, gain);
+      this.audio.purchase?.();
+      this._syncUI();
+    }
+    return result;
+  }
+
+  _applyShopStatToPlayer(stat, gain) {
+    if (!this.player) return;
+    const p = this.player;
+    switch (stat) {
+      case 'damageMult':          p.damageMult          = (p.damageMult          || 1)   + gain; break;
+      case 'fireRateMult':        p.fireRateMult        = (p.fireRateMult        || 1)   * (1 + gain); break;
+      case 'projectileSpeedMult': p.projectileSpeedMult = (p.projectileSpeedMult || 1)   * (1 + gain); break;
+      case 'critChance':          p.critChance          = (p.critChance          || 0)   + gain; break;
+      case 'critDamageMult':      p.critDamageMult      = (p.critDamageMult      || 1.5) + gain; break;
+      case 'bossDamageMult':      p.bossDamageMult      = (p.bossDamageMult      || 1)   + gain; break;
+      case 'eliteDamageMult':     p.eliteDamageMult     = (p.eliteDamageMult     || 1)   + gain; break;
+      case 'spreadShots':         p.extraShots          = (p.extraShots          || 0)   + gain; break;
+      case 'abilityPowerMult':    p.abilityPower        = (p.abilityPower        || 1)   + gain; break;
+      case 'cooldownReduction':   p.cooldownReduction   = (p.cooldownReduction   || 0)   + gain; break;
+      case 'maxHpBonus':          p.maxHp += gain; p.hp = Math.min(p.hp + gain, p.maxHp); break;
+      case 'shieldCapBonus':      p.shieldMax           = (p.shieldMax           || 0)   + gain; break;
+      case 'shieldRegenBonus':    p.shieldRegen         = (p.shieldRegen         || 0)   + gain; break;
+      case 'moveSpeedMult':       p.speed               = (p.speed               || 3)   * (1 + gain); break;
+      case 'droneDamageMult':     p.droneDamageMult     = (p.droneDamageMult     || 1)   + gain; break;
+      case 'droneCountBonus':     p.drones              = (p.drones              || 0)   + Math.floor(gain); break;
+      case 'xpMult':              p.xpMult              = (p.xpMult              || 1)   + gain; break;
+      case 'goldMult':            p.goldMult            = (p.goldMult            || 1)   + gain; break;
+      case 'pickupRadiusBonus':   p.magnetRadius        = (p.magnetRadius        || 80)  + gain; break;
+      case 'lootQuality':         p.lootQuality         = (p.lootQuality         || 0)   + gain; break;
+      case 'explosionRadiusMult': p.explosionRadiusMult = (p.explosionRadiusMult || 1)   * (1 + gain); break;
+      case 'pierceBonus':         p.pierce              = (p.pierce              || 0)   + gain; break;
+      case 'homingStrength':      p.homingStrength      = (p.homingStrength      || 0)   + gain; break;
+      case 'ricochetBonus':       p.ricochet            = (p.ricochet            || 0)   + gain; break;
+      case 'rubyDropMult':        /* tracked via metaStats */                             break;
+      case 'chestQuality':        p.chestQuality        = (p.chestQuality        || 0)   + gain; break;
+      default: break;
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   _render() {
-    this.ctx.clearRect(0,0,this.W,this.H); this.ctx.fillStyle='#030712'; this.ctx.fillRect(0,0,this.W,this.H);
-    this.ctx.save(); this.ctx.translate(this.W/2+this.shakeX, this.H/2+this.shakeY); this.ctx.translate(-this.camera.x, -this.camera.y);
+    this.ctx.clearRect(0,0,this.W,this.H);
+    this.ctx.fillStyle='#030712';
+    this.ctx.fillRect(0,0,this.W,this.H);
+    // Background drawn in screen space so it tiles infinitely
     this._renderNebulae();
     this._renderStars();
+    this.ctx.save();
+    this.ctx.translate(this.W/2+this.shakeX, this.H/2+this.shakeY);
+    this.ctx.translate(-this.camera.x, -this.camera.y);
     this._renderPods();
     this._renderLoot();
     this._renderChests();
@@ -1262,33 +1650,57 @@ export class GameEngine {
 
   _renderNebulae() {
     if (this.mobilePerformanceMode) return;
-    const cx = this.camera.x, cy=this.camera.y;
-    [{x:-300,y:-200,r:400,c:'rgba(124,58,237,0.06)'},{x:500,y:300,r:350,c:'rgba(6,182,212,0.05)'},{x:-100,y:500,r:500,c:'rgba(239,68,68,0.04)'},{x:800,y:-400,r:300,c:'rgba(52,211,153,0.04)'}].forEach(n=>{
-      const gx=n.x-(cx*0.3); const gy=n.y-(cy*0.3); const grad=this.ctx.createRadialGradient(gx,gy,0,gx,gy,n.r);
-      grad.addColorStop(0,n.c); grad.addColorStop(1,'transparent'); this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.arc(gx,gy,n.r,0,TAU); this.ctx.fill();
+    const cx = this.camera.x * 0.15, cy = this.camera.y * 0.15;
+    const W = this.W, H = this.H;
+    [{x:0.2,y:0.3,r:400,c:'rgba(124,58,237,0.06)'},{x:0.7,y:0.6,r:350,c:'rgba(6,182,212,0.05)'},{x:0.15,y:0.75,r:500,c:'rgba(239,68,68,0.04)'},{x:0.85,y:0.2,r:300,c:'rgba(52,211,153,0.04)'}].forEach(n=>{
+      // Anchor nebulae to fractional screen positions, shifted gently by camera
+      const gx = n.x*W - (cx % W); const gy = n.y*H - (cy % H);
+      const grad=this.ctx.createRadialGradient(gx,gy,0,gx,gy,n.r);
+      grad.addColorStop(0,n.c); grad.addColorStop(1,'transparent');
+      this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.arc(gx,gy,n.r,0,TAU); this.ctx.fill();
     });
   }
 
   _renderStars() {
+    // Stars are in screen space, tiled so they repeat infinitely as camera moves
+    const W = this.W, H = this.H;
+    const tile = (v, size, parallax, cam) => {
+      const offset = ((v - cam * parallax) % size + size) % size;
+      return offset;
+    };
     this.stars.forEach(s=>{
-      const alpha=s.alpha*(0.7+0.3*Math.sin(this.tick*0.02+s.twinkle)); this.ctx.globalAlpha=alpha; this.ctx.fillStyle='#fff'; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.1),s.y-(this.camera.y*0.1),s.size,0,TAU); this.ctx.fill();
+      const alpha=s.alpha*(0.7+0.3*Math.sin(this.tick*0.02+s.twinkle));
+      // Map star into tiled screen space (tile size = W/H)
+      const sx = tile(s.x, W, 0.1, this.camera.x);
+      const sy = tile(s.y, H, 0.1, this.camera.y);
+      this.ctx.globalAlpha=alpha; this.ctx.fillStyle='#fff';
+      this.ctx.beginPath(); this.ctx.arc(sx, sy, s.size, 0, TAU); this.ctx.fill();
     });
     if (!this.mobilePerformanceMode) {
-      this.starsNear.forEach(s=>{ this.ctx.globalAlpha=s.alpha; this.ctx.fillStyle=s.color; this.ctx.beginPath(); this.ctx.arc(s.x-(this.camera.x*0.4),s.y-(this.camera.y*0.4),s.size,0,TAU); this.ctx.fill(); });
+      this.starsNear.forEach(s=>{
+        const sx = tile(s.x, W, 0.25, this.camera.x);
+        const sy = tile(s.y, H, 0.25, this.camera.y);
+        this.ctx.globalAlpha=s.alpha; this.ctx.fillStyle=s.color;
+        this.ctx.beginPath(); this.ctx.arc(sx, sy, s.size, 0, TAU); this.ctx.fill();
+      });
     }
     this.ctx.globalAlpha=1;
   }
 
   _renderPods() {
     this.pods.forEach(pod=>{
-      if(!pod.active) return; const pulse=0.85+0.15*Math.sin(pod.pulse); this.ctx.save(); this.ctx.translate(pod.pos.x,pod.pos.y); this.ctx.rotate(pod.spin); 
-      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 15; this.ctx.shadowColor=pod.type==='powerup'?'#fbbf24':'#60a5fa';
+      if(!pod.active) return;
+      const pulse=0.85+0.15*Math.sin(pod.pulse);
+      this.ctx.save(); this.ctx.translate(pod.pos.x,pod.pos.y); this.ctx.rotate(pod.spin);
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 15;
+      this.ctx.shadowColor=pod.type==='powerup'?'#fbbf24':'#60a5fa';
       const grad=this.ctx.createRadialGradient(0,0,0,0,0,pod.radius*pulse);
-      if (pod.type==='powerup') { grad.addColorStop(0,'#fef9c3'); grad.addColorStop(0.6,'#fbbf24'); grad.addColorStop(1,'#92400e'); } else { grad.addColorStop(0,'#e0f2fe'); grad.addColorStop(0.6,'#60a5fa'); grad.addColorStop(1,'#1e3a5f'); }
+      if(pod.type==='powerup'){ grad.addColorStop(0,'#fef9c3'); grad.addColorStop(0.6,'#fbbf24'); grad.addColorStop(1,'#92400e'); }
+      else { grad.addColorStop(0,'#e0f2fe'); grad.addColorStop(0.6,'#60a5fa'); grad.addColorStop(1,'#1e3a5f'); }
       this.ctx.fillStyle=grad; this.ctx.beginPath();
-      for(let i=0;i<8;i++) { const a=(i/8)*TAU; const r=pod.radius*(i%2===0?1:0.8)*pulse; if(i===0) this.ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r); else this.ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); }
+      for(let i=0;i<8;i++){ const a=(i/8)*TAU; const r=pod.radius*(i%2===0?1:0.8)*pulse; if(i===0) this.ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r); else this.ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); }
       this.ctx.closePath(); this.ctx.fill();
-      if(pod.hp<pod.maxHp) { this.ctx.shadowBlur=0; this.ctx.fillStyle='rgba(0,0,0,0.5)'; this.ctx.fillRect(-pod.radius,-pod.radius-8,pod.radius*2,4); this.ctx.fillStyle='#ef4444'; this.ctx.fillRect(-pod.radius,-pod.radius-8,pod.radius*2*(pod.hp/pod.maxHp),4); }
+      if(pod.hp<pod.maxHp){ this.ctx.shadowBlur=0; this.ctx.fillStyle='rgba(0,0,0,0.5)'; this.ctx.fillRect(-pod.radius,-pod.radius-8,pod.radius*2,4); this.ctx.fillStyle='#ef4444'; this.ctx.fillRect(-pod.radius,-pod.radius-8,pod.radius*2*(pod.hp/pod.maxHp),4); }
       this.ctx.restore();
     });
     this.ctx.shadowBlur=0;
@@ -1296,9 +1708,14 @@ export class GameEngine {
 
   _renderLoot() {
     this.loot.forEach(l=>{
-      if(!l.active) return; const pulse=0.8+0.2*Math.sin(l.pulse); this.ctx.save(); this.ctx.translate(l.pos.x,l.pos.y); 
-      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 10; this.ctx.shadowColor=l.color; this.ctx.fillStyle=l.color; this.ctx.globalAlpha=0.9+0.1*pulse; this.ctx.beginPath();
-      if(l.type==='gold') { this.ctx.arc(0,0,l.radius*pulse,0,TAU); } else { this.ctx.moveTo(0,-l.radius*pulse); this.ctx.lineTo(l.radius*0.7*pulse,0); this.ctx.lineTo(0,l.radius*pulse); this.ctx.lineTo(-l.radius*0.7*pulse,0); this.ctx.closePath(); }
+      if(!l.active) return;
+      const pulse=0.8+0.2*Math.sin(l.pulse);
+      this.ctx.save(); this.ctx.translate(l.pos.x,l.pos.y);
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 10;
+      this.ctx.shadowColor=l.color; this.ctx.fillStyle=l.color; this.ctx.globalAlpha=0.9+0.1*pulse;
+      this.ctx.beginPath();
+      if(l.type==='gold'){ this.ctx.arc(0,0,l.radius*pulse,0,TAU); }
+      else { this.ctx.moveTo(0,-l.radius*pulse); this.ctx.lineTo(l.radius*0.7*pulse,0); this.ctx.lineTo(0,l.radius*pulse); this.ctx.lineTo(-l.radius*0.7*pulse,0); this.ctx.closePath(); }
       this.ctx.fill(); this.ctx.restore();
     });
     this.ctx.globalAlpha=1; this.ctx.shadowBlur=0;
@@ -1306,103 +1723,96 @@ export class GameEngine {
 
   _renderParticles() {
     this.ctx.save();
-    this.particles.forEach(p => {
-      if (!p.active) return;
-      this.ctx.globalAlpha = p.alpha; this.ctx.fillStyle = p.color;
-      this.ctx.beginPath(); this.ctx.arc(p.pos.x, p.pos.y, p.size, 0, TAU); this.ctx.fill();
+    this.particles.forEach(p=>{
+      if(!p.active) return;
+      this.ctx.globalAlpha=p.alpha; this.ctx.fillStyle=p.color;
+      this.ctx.beginPath(); this.ctx.arc(p.pos.x,p.pos.y,p.size,0,TAU); this.ctx.fill();
     });
-    this.ctx.restore(); this.ctx.globalAlpha = 1;
+    this.ctx.restore(); this.ctx.globalAlpha=1;
   }
 
   _renderBullets() {
     this.bullets.forEach(b=>{
       if(!b.active) return; this.ctx.save();
-      if(b.trail.length>1) { this.ctx.globalAlpha=0.35; this.ctx.strokeStyle=b.color; this.ctx.lineWidth=b.radius*0.8; this.ctx.lineCap='round'; this.ctx.beginPath(); this.ctx.moveTo(b.trail[0].x,b.trail[0].y); b.trail.forEach(pt=>this.ctx.lineTo(pt.x,pt.y)); this.ctx.stroke(); }
-      this.ctx.globalAlpha=1; this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (b.owner==='player'?12:8); this.ctx.shadowColor=b.color; this.ctx.fillStyle=b.color; this.ctx.beginPath(); this.ctx.arc(b.pos.x,b.pos.y,b.radius,0,TAU); this.ctx.fill(); this.ctx.restore();
+      if(b.trail && b.trail.length>1){ this.ctx.globalAlpha=0.35; this.ctx.strokeStyle=b.color; this.ctx.lineWidth=b.radius*0.8; this.ctx.lineCap='round'; this.ctx.beginPath(); this.ctx.moveTo(b.trail[0].x,b.trail[0].y); b.trail.forEach(pt=>this.ctx.lineTo(pt.x,pt.y)); this.ctx.stroke(); }
+      this.ctx.globalAlpha=1; this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (b.owner==='player'?12:8);
+      this.ctx.shadowColor=b.color; this.ctx.fillStyle=b.color;
+      this.ctx.beginPath(); this.ctx.arc(b.pos.x,b.pos.y,b.radius,0,TAU); this.ctx.fill();
+      this.ctx.restore();
     });
     this.ctx.shadowBlur=0;
   }
 
   _renderEnemies() {
     this.enemies.forEach(e=>{
-      if(!e.active) return; this.ctx.save(); this.ctx.translate(e.pos.x,e.pos.y); this.ctx.rotate(e.angle+Math.PI/2);
-      if(e.spawnFlash>0) this.ctx.globalAlpha=1-(e.spawnFlash/30);
-      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (e.flash>0?20:12); this.ctx.shadowColor=e.flash>0?'#fff':e.glowColor; this.ctx.fillStyle=e.flash>0?'#fff':e.color;
-      const r=e.radius;
-      if(e.type === 'drone') { this.ctx.beginPath(); this.ctx.moveTo(0,-r); this.ctx.lineTo(-r*0.7,r*0.8); this.ctx.lineTo(0,r*0.4); this.ctx.lineTo(r*0.7,r*0.8); this.ctx.closePath(); this.ctx.fill(); }
-      else if(e.type === 'kamikaze') { this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r,r); this.ctx.lineTo(r,r); this.ctx.closePath(); this.ctx.fill(); }
-      else if(e.type === 'tank') { this.ctx.fillRect(-r,-r,r*2,r*2); this.ctx.fillStyle=e.flash>0?'#fff':'#374151'; this.ctx.fillRect(-r*0.5,-r*0.5,r,r); }
-      else if(e.type === 'sniper') { this.ctx.beginPath(); for(let i=0;i<6;i++){ const a=(i/6)*TAU; const rr=i%2===0?r:r*0.5; if(i===0) this.ctx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr); else this.ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr); } this.ctx.closePath(); this.ctx.fill(); }
-      else if(e.type === 'swarm') { this.ctx.beginPath(); this.ctx.arc(0,0,r,0,TAU); this.ctx.fill(); }
-      this.ctx.restore();
-      if(e.hp<e.maxHp) { const bw=e.radius*2.2; this.ctx.fillStyle='rgba(0,0,0,0.6)'; this.ctx.fillRect(e.pos.x-bw/2,e.pos.y-e.radius-9,bw,4); this.ctx.fillStyle=e.hp/e.maxHp>0.5?'#4ade80':'#f87171'; this.ctx.fillRect(e.pos.x-bw/2,e.pos.y-e.radius-9,bw*(e.hp/e.maxHp),4); }
+      if(!e.active) return;
+      renderEnemy(this.ctx, e, this.tick, this.mobilePerformanceMode);
+      if(e.hp<e.maxHp){ const bw=e.radius*2.2; this.ctx.fillStyle='rgba(0,0,0,0.6)'; this.ctx.fillRect(e.pos.x-bw/2,e.pos.y-e.radius-9,bw,4); this.ctx.fillStyle=e.hp/e.maxHp>0.5?'#4ade80':'#f87171'; this.ctx.fillRect(e.pos.x-bw/2,e.pos.y-e.radius-9,bw*(e.hp/e.maxHp),4); }
     });
     this.ctx.shadowBlur=0; this.ctx.globalAlpha=1;
   }
 
   _renderBoss() {
-    const b=this.boss; if(!b||!b.active) return; this.ctx.save(); this.ctx.translate(b.pos.x,b.pos.y);
-    if(b.spawnFlash>0) this.ctx.globalAlpha=1-(b.spawnFlash/60);
-    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : (b.flash>0?40:25); this.ctx.shadowColor=b.flash>0?'#fff':this.bossData.accent;
-    this.ctx.strokeStyle=this.bossData.accent; this.ctx.lineWidth=3; this.ctx.globalAlpha=(this.ctx.globalAlpha||1)*0.4; this.ctx.beginPath(); this.ctx.arc(0,0,b.radius+12+Math.sin(this.tick*0.05)*5,0,TAU); this.ctx.stroke();
-    this.ctx.globalAlpha=b.spawnFlash>0?(1-b.spawnFlash/60):1;
-    const grad=this.ctx.createRadialGradient(0,0,0,0,0,b.radius); grad.addColorStop(0,this.bossData.accent+'cc'); grad.addColorStop(0.5,this.bossData.color+'ee'); grad.addColorStop(1,'#00000000'); this.ctx.fillStyle=grad; this.ctx.rotate(b.angle*0.5); this.ctx.beginPath();
-    for(let i=0;i<8;i++){ const a=(i/8)*TAU; const bulge=i%2===0?b.radius:b.radius*0.75; if(i===0) this.ctx.moveTo(Math.cos(a)*bulge,Math.sin(a)*bulge); else this.ctx.lineTo(Math.cos(a)*bulge,Math.sin(a)*bulge); }
-    this.ctx.closePath(); this.ctx.fill(); if(b.flash>0){ this.ctx.fillStyle='#ffffff44'; this.ctx.fill(); } this.ctx.restore(); this.ctx.shadowBlur=0;
+    const b=this.boss; if(!b||!b.active) return;
+    renderBoss(this.ctx, b, this.bossData || {}, this.tick, this.mobilePerformanceMode);
+    this.ctx.shadowBlur=0;
   }
 
   _renderPlayer() {
     const p=this.player; if(!p||p.dead) return;
-    if(p.trail.length>2 && V.len(p.vel)>0.5){
+    if(p.trail && p.trail.length>2 && V.len(p.vel)>0.5){
       for(let i=1;i<p.trail.length;i++){
         const t=i/p.trail.length; this.ctx.globalAlpha=t*0.4; this.ctx.strokeStyle=`hsl(${180+this.tick*2},100%,70%)`; this.ctx.lineWidth=(1-t)*p.radius*0.8; this.ctx.lineCap='round'; this.ctx.beginPath(); this.ctx.moveTo(p.trail[i-1].x,p.trail[i-1].y); this.ctx.lineTo(p.trail[i].x,p.trail[i].y); this.ctx.stroke();
       }
       this.ctx.globalAlpha=1;
     }
     this.ctx.save(); this.ctx.translate(p.pos.x,p.pos.y); this.ctx.rotate(p.angle+Math.PI/2);
-    if(p.invuln && Math.floor(this.tick/3)%2===0) { this.ctx.restore(); return; }
-    if(p.shield>0) { this.ctx.shadowBlur=0; this.ctx.strokeStyle='rgba(96,165,250,0.5)'; this.ctx.lineWidth=2; this.ctx.beginPath(); this.ctx.arc(0,0,p.radius+8+Math.sin(this.tick*0.1)*2,0,TAU); this.ctx.stroke(); }
-    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 20; this.ctx.shadowColor='#7c3aed'; const r=p.radius; const grad=this.ctx.createLinearGradient(0,-r,0,r); grad.addColorStop(0,'#c4b5fd'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'#4c1d95'); this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r*0.8,r*0.6); this.ctx.lineTo(-r*0.35,r*0.2); this.ctx.lineTo(0,r*0.5); this.ctx.lineTo(r*0.35,r*0.2); this.ctx.lineTo(r*0.8,r*0.6); this.ctx.closePath(); this.ctx.fill();
-    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 8; this.ctx.shadowColor='#38bdf8'; this.ctx.fillStyle='#bae6fd'; this.ctx.beginPath(); this.ctx.arc(0,-r*0.3,r*0.28,0,TAU); this.ctx.fill();
+    if(p.invuln && Math.floor(this.tick/3)%2===0){ this.ctx.restore(); return; }
+    if(p.shield>0){ this.ctx.shadowBlur=0; this.ctx.strokeStyle='rgba(96,165,250,0.5)'; this.ctx.lineWidth=2; this.ctx.beginPath(); this.ctx.arc(0,0,p.radius+8+Math.sin(this.tick*0.1)*2,0,TAU); this.ctx.stroke(); }
+    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 20; this.ctx.shadowColor='#7c3aed';
+    const r=p.radius;
+    const grad=this.ctx.createLinearGradient(0,-r,0,r);
+    grad.addColorStop(0,'#c4b5fd'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'#4c1d95');
+    this.ctx.fillStyle=grad; this.ctx.beginPath();
+    this.ctx.moveTo(0,-r*1.2); this.ctx.lineTo(-r*0.8,r*0.6); this.ctx.lineTo(-r*0.35,r*0.2); this.ctx.lineTo(0,r*0.5); this.ctx.lineTo(r*0.35,r*0.2); this.ctx.lineTo(r*0.8,r*0.6); this.ctx.closePath(); this.ctx.fill();
+    this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 8; this.ctx.shadowColor='#38bdf8'; this.ctx.fillStyle='#bae6fd';
+    this.ctx.beginPath(); this.ctx.arc(0,-r*0.3,r*0.28,0,TAU); this.ctx.fill();
     if(V.len(p.vel)>0.3){
-      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#fbbf24'; const exGrad=this.ctx.createLinearGradient(0,r*0.4,0,r*1.4); exGrad.addColorStop(0,'#fbbf24aa'); exGrad.addColorStop(1,'transparent'); this.ctx.fillStyle=exGrad; this.ctx.beginPath(); this.ctx.moveTo(-r*0.3,r*0.4); this.ctx.lineTo(r*0.3,r*0.4); this.ctx.lineTo((Math.random()-0.5)*r*0.3,r*(1+Math.random()*0.5)); this.ctx.closePath(); this.ctx.fill();
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#fbbf24';
+      const exGrad=this.ctx.createLinearGradient(0,r*0.4,0,r*1.4);
+      exGrad.addColorStop(0,'#fbbf24aa'); exGrad.addColorStop(1,'transparent');
+      this.ctx.fillStyle=exGrad; this.ctx.beginPath();
+      this.ctx.moveTo(-r*0.3,r*0.4); this.ctx.lineTo(r*0.3,r*0.4); this.ctx.lineTo((Math.random()-0.5)*r*0.3,r*(1+Math.random()*0.5)); this.ctx.closePath(); this.ctx.fill();
     }
     this.ctx.restore(); this.ctx.shadowBlur=0; this.ctx.globalAlpha=1;
   }
 
   _renderDrones() {
-    this.activeDrones.forEach(d=>{ if(d.active) { this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle); this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9'; this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill(); this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill(); this.ctx.restore(); } });
+    this.activeDrones.forEach(d=>{
+      if(!d.active) return;
+      this.ctx.save(); this.ctx.translate(d.pos.x,d.pos.y); this.ctx.rotate(d.angle);
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 12; this.ctx.shadowColor='#a5f3fc'; this.ctx.fillStyle='#67e8f9';
+      this.ctx.beginPath(); this.ctx.arc(0,0,7,0,TAU); this.ctx.fill();
+      this.ctx.fillStyle='#164e63'; this.ctx.beginPath(); this.ctx.arc(0,0,3,0,TAU); this.ctx.fill();
+      this.ctx.restore();
+    });
     this.ctx.shadowBlur=0;
   }
 
   _renderChests() {
-    this.chests.forEach(c => {
-      if (!c.active || c.opened) return;
-      const tier = CHEST_TIERS[c.tier];
-      const pulse = 0.9 + 0.1 * Math.sin(c.pulse);
-      
-      this.ctx.save();
-      this.ctx.translate(c.pos.x, c.pos.y);
-      this.ctx.rotate(c.spin);
-      
-      this.ctx.shadowBlur = this.mobilePerformanceMode ? 0 : 20;
-      this.ctx.shadowColor = tier.color;
-      
-      const grad = this.ctx.createRadialGradient(0, 0, 0, 0, 0, c.radius * pulse);
-      grad.addColorStop(0, tier.color + 'ff');
-      grad.addColorStop(0.7, tier.color + 'aa');
-      grad.addColorStop(1, tier.color + '00');
-      
-      this.ctx.fillStyle = grad;
-      this.ctx.fillRect(-c.radius * pulse, -c.radius * pulse, c.radius * 2 * pulse, c.radius * 2 * pulse);
-      
-      this.ctx.strokeStyle = tier.color;
-      this.ctx.lineWidth = 3;
-      this.ctx.strokeRect(-c.radius * 0.8, -c.radius * 0.8, c.radius * 1.6, c.radius * 1.6);
-      
+    this.chests.forEach(c=>{
+      if(!c.active||c.opened) return;
+      const tier=CHEST_TIERS[c.tier]||{color:'#60a5fa'};
+      const pulse=0.9+0.1*Math.sin(c.pulse);
+      this.ctx.save(); this.ctx.translate(c.pos.x,c.pos.y); this.ctx.rotate(c.spin);
+      this.ctx.shadowBlur=this.mobilePerformanceMode ? 0 : 20; this.ctx.shadowColor=tier.color;
+      const grad=this.ctx.createRadialGradient(0,0,0,0,0,c.radius*pulse);
+      grad.addColorStop(0,tier.color+'ff'); grad.addColorStop(0.7,tier.color+'aa'); grad.addColorStop(1,tier.color+'00');
+      this.ctx.fillStyle=grad; this.ctx.fillRect(-c.radius*pulse,-c.radius*pulse,c.radius*2*pulse,c.radius*2*pulse);
+      this.ctx.strokeStyle=tier.color; this.ctx.lineWidth=3; this.ctx.strokeRect(-c.radius*0.8,-c.radius*0.8,c.radius*1.6,c.radius*1.6);
       this.ctx.restore();
     });
-    this.ctx.shadowBlur = 0;
+    this.ctx.shadowBlur=0;
   }
 
   _renderEquipmentDrops() {
@@ -1414,24 +1824,15 @@ export class GameEngine {
   }
 
   _renderToxicClouds() {
-    if (this.mobilePerformanceMode) return;
-    this.toxicClouds.forEach(cloud => {
-      const alpha = cloud.life / cloud.maxLife;
-      this.ctx.save();
-      this.ctx.globalAlpha = alpha * 0.4;
-      
-      const grad = this.ctx.createRadialGradient(cloud.pos.x, cloud.pos.y, 0, cloud.pos.x, cloud.pos.y, cloud.radius);
-      grad.addColorStop(0, '#a855f7');
-      grad.addColorStop(0.5, '#7c3aed');
-      grad.addColorStop(1, 'transparent');
-      
-      this.ctx.fillStyle = grad;
-      this.ctx.beginPath();
-      this.ctx.arc(cloud.pos.x, cloud.pos.y, cloud.radius, 0, TAU);
-      this.ctx.fill();
-      
+    if(this.mobilePerformanceMode) return;
+    this.toxicClouds.forEach(cloud=>{
+      const alpha=cloud.life/cloud.maxLife;
+      this.ctx.save(); this.ctx.globalAlpha=alpha*0.4;
+      const grad=this.ctx.createRadialGradient(cloud.pos.x,cloud.pos.y,0,cloud.pos.x,cloud.pos.y,cloud.radius);
+      grad.addColorStop(0,'#a855f7'); grad.addColorStop(0.5,'#7c3aed'); grad.addColorStop(1,'transparent');
+      this.ctx.fillStyle=grad; this.ctx.beginPath(); this.ctx.arc(cloud.pos.x,cloud.pos.y,cloud.radius,0,TAU); this.ctx.fill();
       this.ctx.restore();
     });
-    this.ctx.globalAlpha = 1;
+    this.ctx.globalAlpha=1;
   }
 }
