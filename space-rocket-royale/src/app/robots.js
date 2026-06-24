@@ -1,5 +1,4 @@
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://space-rocket-royale.vercel.app";
+export const dynamic = "force-static";
 
 export default function robots() {
   return {
@@ -7,7 +6,6 @@ export default function robots() {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: `${siteUrl}/sitemap.xml`,
-    host: siteUrl,
+    host: "https://space-rocket-royale.vercel.app",
   };
 }

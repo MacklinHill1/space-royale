@@ -13,6 +13,9 @@ import { RARITY_COLORS } from '../../constants/EquipmentData';
 import { ABILITY_RARITY_COLORS } from '../../constants/AbilityData';
 import { computeShopStats } from '../../systems/ShopSystem';
 import { computeAllMetaStats } from '../../systems/MetaProgression';
+import VirtualJoystick from '../../ui/mobile/VirtualJoystick';
+import MobileAbilityBar from '../../ui/mobile/MobileAbilityBar';
+import { useMobileDetect, isMobileOrTablet } from '../../hooks/useMobileDetect';
 
 function HomepageSeoContent() {
   return (
@@ -234,7 +237,7 @@ function ShopModal({ engine, gold, purchasedItems, stock, timer }) {
 
   return (
     <div style={{ position:'absolute',inset:0,background:'rgba(3,7,18,0.92)',backdropFilter:'blur(12px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:50,fontFamily:'"Courier New",monospace' }}>
-      <div style={{ background:'linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,10,60,0.98))',border:'1px solid rgba(139,92,246,0.3)',borderRadius:'20px',padding:'32px',maxWidth:'680px',width:'90%',boxShadow:'0 0 60px rgba(139,92,246,0.2)' }}>
+      <div style={{ background:'linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,10,60,0.98))',border:'1px solid rgba(139,92,246,0.3)',borderRadius:'20px',padding:'24px',maxWidth:'680px',width:'90%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 0 60px rgba(139,92,246,0.2)' }}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px'}}>
           <div>
             <div style={{fontSize:'1.5rem',fontWeight:'700',color:'#c4b5fd',letterSpacing:'0.1em'}}>⚙ UPGRADE SHOP</div>
@@ -309,69 +312,106 @@ function ActiveUpgradesPanel({ purchasedItems, onClose }) {
   );
 }
 
-function HUD({ state, engine }) {
+function HUD({ state, engine, isMobile, onPause }) {
   const { hp,maxHp,shield,shieldMax,xp,xpToNext,level,gold,score,kills,wave,sessionTime,bossHp,bossMaxHp,bossName,dashReady,bombReady,bombDmg,drones,worldEvent,purchasedItems } = state;
   const [showUpgrades, setShowUpgrades] = useState(false);
   const barW = (val,max) => `${Math.max(0,Math.min(100,(val/Math.max(1,max))*100))}%`;
+
+  // Scale bar sizes for mobile readability
+  const hullBarH = isMobile ? '10px' : '8px';
+  const shieldBarH = isMobile ? '8px' : '6px';
+  const xpBarH = isMobile ? '7px' : '5px';
+  const statFontSm = isMobile ? '0.85rem' : '0.7rem';
+  const statFontXs = isMobile ? '0.8rem' : '0.65rem';
+  const barsWidth = isMobile ? '180px' : '220px';
+
+  // Boss bar positioned above action buttons; higher on mobile to clear MobileAbilityBar
+  const bossBarBottom = isMobile ? '130px' : '90px';
+
   return (
     <div style={{position:'absolute',inset:0,pointerEvents:'none',fontFamily:'"Courier New",monospace',userSelect:'none'}}>
-      <div style={{position:'absolute',top:16,left:16,width:'220px'}}>
+      {/* Top-left: HP / Shield / XP bars */}
+      <div style={{position:'absolute',top:'max(16px, env(safe-area-inset-top))',left:'max(16px, env(safe-area-inset-left))',width:barsWidth}}>
         <div style={{marginBottom:'6px'}}>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
-            <span style={{color:'#f87171',fontSize:'0.7rem',letterSpacing:'0.1em'}}>HULL</span>
-            <span style={{color:'#e2e8f0',fontSize:'0.7rem'}}>{Math.ceil(Math.max(0,hp))}/{maxHp}</span>
+            <span style={{color:'#f87171',fontSize:statFontSm,letterSpacing:'0.1em'}}>HULL</span>
+            <span style={{color:'#e2e8f0',fontSize:statFontSm}}>{Math.ceil(Math.max(0,hp))}/{maxHp}</span>
           </div>
-          <div style={{height:'8px',background:'rgba(0,0,0,0.5)',borderRadius:'4px',overflow:'hidden',border:'1px solid rgba(255,255,255,0.1)'}}>
+          <div style={{height:hullBarH,background:'rgba(0,0,0,0.5)',borderRadius:'4px',overflow:'hidden',border:'1px solid rgba(255,255,255,0.1)'}}>
             <div style={{height:'100%',width:barW(hp,maxHp),background:`linear-gradient(90deg,#ef4444,#f97316)`,boxShadow:'0 0 8px #ef4444'}}/>
           </div>
         </div>
         {shieldMax > 0 && (
           <div style={{marginBottom:'6px'}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
-              <span style={{color:'#60a5fa',fontSize:'0.7rem',letterSpacing:'0.1em'}}>SHIELD</span>
-              <span style={{color:'#e2e8f0',fontSize:'0.7rem'}}>{Math.ceil(shield)}/{shieldMax}</span>
+              <span style={{color:'#60a5fa',fontSize:statFontSm,letterSpacing:'0.1em'}}>SHIELD</span>
+              <span style={{color:'#e2e8f0',fontSize:statFontSm}}>{Math.ceil(shield)}/{shieldMax}</span>
             </div>
-            <div style={{height:'6px',background:'rgba(0,0,0,0.5)',borderRadius:'4px',overflow:'hidden',border:'1px solid rgba(255,255,255,0.1)'}}>
+            <div style={{height:shieldBarH,background:'rgba(0,0,0,0.5)',borderRadius:'4px',overflow:'hidden',border:'1px solid rgba(255,255,255,0.1)'}}>
               <div style={{height:'100%',width:barW(shield,shieldMax),background:'linear-gradient(90deg,#3b82f6,#60a5fa)',boxShadow:'0 0 8px #3b82f6'}}/>
             </div>
           </div>
         )}
         <div>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
-            <span style={{color:'#7c3aed',fontSize:'0.7rem',letterSpacing:'0.1em'}}>LVL {level}</span>
-            <span style={{color:'#94a3b8',fontSize:'0.65rem'}}>{Math.floor(xp)}/{Math.floor(xpToNext)}</span>
+            <span style={{color:'#7c3aed',fontSize:statFontSm,letterSpacing:'0.1em'}}>LVL {level}</span>
+            <span style={{color:'#94a3b8',fontSize:statFontXs}}>{Math.floor(xp)}/{Math.floor(xpToNext)}</span>
           </div>
-          <div style={{height:'5px',background:'rgba(0,0,0,0.5)',borderRadius:'3px',overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)'}}>
+          <div style={{height:xpBarH,background:'rgba(0,0,0,0.5)',borderRadius:'3px',overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)'}}>
             <div style={{height:'100%',width:barW(xp,xpToNext),background:'linear-gradient(90deg,#7c3aed,#a855f7)',boxShadow:'0 0 6px #7c3aed'}}/>
           </div>
         </div>
       </div>
-      <div style={{position:'absolute',top:16,right:16,textAlign:'right'}}>
-        <div style={{color:'#fbbf24',fontSize:'1.1rem',fontWeight:'700'}}>🪙 {gold?.toLocaleString()}</div>
-        <div style={{color:'#94a3b8',fontSize:'0.8rem'}}>Score {score?.toLocaleString()}</div>
+
+      {/* Top-right: gold / score / wave — plus mobile pause button */}
+      <div style={{position:'absolute',top:'max(16px, env(safe-area-inset-top))',right:'max(16px, env(safe-area-inset-right))',textAlign:'right',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'2px'}}>
+        {isMobile && (
+          <button
+            onTouchStart={(e) => { e.preventDefault(); onPause?.(); }}
+            onClick={() => onPause?.()}
+            style={{
+              background:'rgba(15,23,42,0.85)', border:'1px solid rgba(139,92,246,0.4)',
+              borderRadius:'8px', padding:'6px 10px', color:'#c4b5fd',
+              fontSize:'0.75rem', fontWeight:'700', cursor:'pointer',
+              pointerEvents:'auto', touchAction:'manipulation', marginBottom:'4px',
+              letterSpacing:'0.08em', fontFamily:'inherit',
+            }}
+          >
+            ⏸ PAUSE
+          </button>
+        )}
+        <div style={{color:'#fbbf24',fontSize: isMobile ? '1rem' : '1.1rem',fontWeight:'700'}}>🪙 {gold?.toLocaleString()}</div>
+        <div style={{color:'#94a3b8',fontSize: isMobile ? '0.75rem' : '0.8rem'}}>Score {score?.toLocaleString()}</div>
         <div style={{color:'#6b7280',fontSize:'0.75rem'}}>Kills {kills} · Wave {wave}</div>
         <div style={{color:'#374151',fontSize:'0.7rem'}}>{Math.floor((sessionTime||0)/60)}:{String(Math.floor((sessionTime||0)%60)).padStart(2,'0')}</div>
       </div>
-      <div style={{position:'absolute',bottom:20,left:'50%',transform:'translateX(-50%)',display:'flex',gap:'10px',pointerEvents:'auto'}}>
-        {[
-          {key:'DASH',icon:'💨',ready:dashReady,hotkey:'SHIFT', action:() => engine._dash()},
-          {key:'BOMB',icon:'💣',ready:bombReady,hotkey:'Q',hidden:!bombDmg, action:() => engine._useBomb()},
-          {key:'MAGNET',icon:'🧲',ready:true,hotkey:'F', action:() => engine._useMagnet()},
-        ].filter(a => !a.hidden).map(a => (
-          <button key={a.key} onClick={a.action} style={{ background:a.ready ? 'rgba(15,23,42,0.9)' : 'rgba(0,0,0,0.5)',border:`1px solid ${a.ready ? 'rgba(139,92,246,0.5)' : 'rgba(55,65,81,0.3)'}`,borderRadius:'10px',width:'44px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#fff',cursor:a.ready ? 'pointer' : 'not-allowed' }}>
-            <span>{a.icon}</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>{a.hotkey}</span>
+
+      {/* Desktop bottom action buttons — hidden on mobile (MobileAbilityBar renders instead) */}
+      {!isMobile && (
+        <div style={{position:'absolute',bottom:20,left:'50%',transform:'translateX(-50%)',display:'flex',gap:'10px',pointerEvents:'auto'}}>
+          {[
+            {key:'DASH',icon:'💨',ready:dashReady,hotkey:'SHIFT', action:() => engine._dash()},
+            {key:'BOMB',icon:'💣',ready:bombReady,hotkey:'Q',hidden:!bombDmg, action:() => engine._useBomb()},
+            {key:'MAGNET',icon:'🧲',ready:true,hotkey:'F', action:() => engine._useMagnet()},
+          ].filter(a => !a.hidden).map(a => (
+            <button key={a.key} onClick={a.action} style={{ background:a.ready ? 'rgba(15,23,42,0.9)' : 'rgba(0,0,0,0.5)',border:`1px solid ${a.ready ? 'rgba(139,92,246,0.5)' : 'rgba(55,65,81,0.3)'}`,borderRadius:'10px',width:'44px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#fff',cursor:a.ready ? 'pointer' : 'not-allowed' }}>
+              <span>{a.icon}</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>{a.hotkey}</span>
+            </button>
+          ))}
+          <button onClick={() => engine._toggleShop()} style={{ background:'rgba(15,23,42,0.9)',border:'1px solid rgba(139,92,246,0.5)',borderRadius:'10px',padding:'0 12px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#c4b5fd',cursor:'pointer' }}>
+            <span>🛒</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>E</span>
           </button>
-        ))}
-        <button onClick={() => engine._toggleShop()} style={{ background:'rgba(15,23,42,0.9)',border:'1px solid rgba(139,92,246,0.5)',borderRadius:'10px',padding:'0 12px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#c4b5fd',cursor:'pointer' }}>
-          <span>🛒</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>E</span>
-        </button>
-        <button onClick={() => setShowUpgrades(v => !v)} style={{ background:'rgba(15,23,42,0.9)',border:`1px solid ${showUpgrades ? 'rgba(251,191,36,0.6)' : 'rgba(139,92,246,0.5)'}`,borderRadius:'10px',padding:'0 12px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#fbbf24',cursor:'pointer' }}>
-          <span>📦</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>{(purchasedItems||[]).length}</span>
-        </button>
-      </div>
+          <button onClick={() => setShowUpgrades(v => !v)} style={{ background:'rgba(15,23,42,0.9)',border:`1px solid ${showUpgrades ? 'rgba(251,191,36,0.6)' : 'rgba(139,92,246,0.5)'}`,borderRadius:'10px',padding:'0 12px',height:'56px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',color:'#fbbf24',cursor:'pointer' }}>
+            <span>📦</span><span style={{fontSize:'0.5rem',color:'#64748b'}}>{(purchasedItems||[]).length}</span>
+          </button>
+        </div>
+      )}
+
       {showUpgrades && <ActiveUpgradesPanel purchasedItems={purchasedItems} onClose={() => setShowUpgrades(false)} />}
+
+      {/* Boss HP bar */}
       {bossHp > 0 && bossName && (
-        <div style={{position:'absolute',bottom:90,left:'50%',transform:'translateX(-50%)',width:'400px',maxWidth:'80vw'}}>
+        <div style={{position:'absolute',bottom:bossBarBottom,left:'50%',transform:'translateX(-50%)',width:'400px',maxWidth:'80vw'}}>
           <div style={{textAlign:'center',marginBottom:'6px',color:'#f87171',fontSize:'0.85rem',fontWeight:'700'}}>⚠ {bossName}</div>
           <div style={{height:'12px',background:'rgba(0,0,0,0.6)',borderRadius:'6px',overflow:'hidden',border:'1px solid rgba(239,68,68,0.3)'}}>
             <div style={{height:'100%',width:barW(bossHp,bossMaxHp),background:'linear-gradient(90deg,#991b1b,#ef4444)'}}/>
@@ -640,8 +680,8 @@ function PauseMenu({ engine, onMenu, onLeave, audio }) {
         background: 'linear-gradient(135deg,rgba(15,23,42,0.98),rgba(20,10,45,0.98))',
         border: '1px solid rgba(139,92,246,0.35)',
         borderRadius: 20,
-        padding: '36px 40px',
-        width: 340,
+        padding: '28px 24px',
+        width: 'min(340px, 88vw)',
         boxShadow: '0 0 60px rgba(139,92,246,0.2)',
         textAlign: 'center',
       }}>
@@ -783,6 +823,10 @@ function RubyPickupFlash({ amount }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Page() {
+  // ── Mobile detection ──────────────────────────────────────────────────────
+  const detect  = useMobileDetect();
+  const onMobile = isMobileOrTablet(detect);
+
   // ── Save / persistence ────────────────────────────────────────────────────
   const {
     save, getBestScore, recordRunResult,
@@ -1025,6 +1069,7 @@ export default function Page() {
     // Give ability loadout to engine
     if (abilityLoadout) eng.abilityLoadout = abilityLoadout;
 
+    eng.isMobileDevice = onMobile;
     eng.startGame(selectedMode);
     engineRef.current = eng;
 
@@ -1033,6 +1078,16 @@ export default function Page() {
 
   // ── Navigation helpers ────────────────────────────────────────────────────
   const goMenu = () => { setScreen('menu'); engineRef.current = null; };
+
+  // ── Joystick input → engine ───────────────────────────────────────────────
+  const handleJoystickMove = useCallback(({ x, y }) => {
+    if (engineRef.current) engineRef.current.joystickInput = { x, y };
+  }, []);
+
+  // ── Mobile pause ──────────────────────────────────────────────────────────
+  const handleMobilePause = useCallback(() => {
+    engineRef.current?._togglePause?.();
+  }, []);
 
   const handleSaveLoot = useCallback((items) => {
     addRunLootToProfile(items);
@@ -1136,22 +1191,28 @@ export default function Page() {
     const engine = engineRef.current;
     const { shopSlots, shopTimer, sessionRubies, rubyPickup } = gameState;
     return (
-      <div ref={containerRef} style={{ position:'fixed', inset:0, background:'#030712' }}>
+      <div ref={containerRef} style={{ position:'fixed', inset:0, background:'#030712', touchAction:'none' }}>
         <canvas
           ref={canvasRef}
           style={{ width:'100%', height:'100%', display:'block' }}
         />
         {/* HUD */}
-        <HUD state={gameState} engine={engine} />
+        <HUD state={gameState} engine={engine} isMobile={onMobile} onPause={handleMobilePause} />
 
-        {/* Ruby counter in HUD */}
-        <div style={{
-          position:'absolute', top:16, right:16, marginTop:80,
-          color:'#e879f9', fontWeight:'700', fontSize:'0.85rem',
-          fontFamily:'"Courier New",monospace', pointerEvents:'none',
-        }}>
-          💎 {(sessionRubies||0)} run rubies
-        </div>
+        {/* Mobile controls: virtual joystick (left half) + action buttons (right) */}
+        {detect.isTouch && <VirtualJoystick onMove={handleJoystickMove} />}
+        {onMobile && engine && <MobileAbilityBar state={gameState} engine={engine} />}
+
+        {/* Ruby counter in HUD — hidden on mobile to avoid crowding top-right */}
+        {!onMobile && (
+          <div style={{
+            position:'absolute', top:16, right:16, marginTop:80,
+            color:'#e879f9', fontWeight:'700', fontSize:'0.85rem',
+            fontFamily:'"Courier New",monospace', pointerEvents:'none',
+          }}>
+            💎 {(sessionRubies||0)} run rubies
+          </div>
+        )}
 
         {/* Ability HUD */}
         {engine && (

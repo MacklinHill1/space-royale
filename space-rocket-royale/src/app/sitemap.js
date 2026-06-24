@@ -1,10 +1,9 @@
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://space-rocket-royale.vercel.app";
+export const dynamic = "force-static";
 
 export default function sitemap() {
   return [
     {
-      url: siteUrl,
+      url: "https://space-rocket-royale.vercel.app",
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1,

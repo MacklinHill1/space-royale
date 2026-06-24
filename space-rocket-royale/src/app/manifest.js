@@ -1,5 +1,4 @@
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://space-rocket-royale.vercel.app";
+export const dynamic = "force-static";
 
 export default function manifest() {
   return {
@@ -9,7 +8,6 @@ export default function manifest() {
       "Free browser space shooter with wave survival, boss fights, and roguelite upgrades.",
     start_url: "/",
     scope: "/",
-    id: siteUrl,
     display: "standalone",
     orientation: "any",
     background_color: "#030712",

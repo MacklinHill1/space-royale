@@ -3,69 +3,61 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-export default function VirtualJoystick({ onMove }) {
-  const [touchId, setTouchId] = useState(null);
-  const [stickPos, setStickPos] = useState({ x: 0, y: 0 });
-  const [basePos, setBasePos] = useState({ x: 0, y: 0 });
-  const [visible, setVisible] = useState(false);
+const JOYSTICK_SIZE = 130; // outer ring diameter px
+const THUMB_SIZE    = 52;  // thumb diameter px
+const MAX_RADIUS    = JOYSTICK_SIZE / 2;
+const DEADZONE      = 0.12;
 
-  const containerRef = useRef(null);
-  const joystickSize = 120; // px diameter
-  const thumbSize = 50;     // px diameter
-  const maxRadius = joystickSize / 2;
-  const deadzone = 0.15;    // normalized deadzone threshold
+// Static position for the "ghost" base (bottom-left)
+const STATIC_X = 80;  // px from left edge
+const STATIC_Y = 80;  // px from bottom edge
+
+export default function VirtualJoystick({ onMove }) {
+  const [touchId,  setTouchId]  = useState(null);
+  const [basePos,  setBasePos]  = useState(null);   // null = use static position
+  const [thumbOff, setThumbOff] = useState({ x: 0, y: 0 }); // offset from base center
 
   useEffect(() => {
     const handleTouchStart = (e) => {
-      if (touchId !== null) return; // Only process one touch boundary tracking cluster
+      if (touchId !== null) return;
 
-      // Guard zone: restrict joystick instantiation to the left half of the screen
       const touch = e.changedTouches[0];
-      if (touch.clientX > window.innerWidth / 2) return;
+      // Only capture touches in the left 45% of the screen
+      if (touch.clientX > window.innerWidth * 0.45) return;
 
+      e.preventDefault();
       setTouchId(touch.identifier);
       setBasePos({ x: touch.clientX, y: touch.clientY });
-      setStickPos({ x: touch.clientX, y: touch.clientY });
-      setVisible(true);
+      setThumbOff({ x: 0, y: 0 });
     };
 
     const handleTouchMove = (e) => {
       if (touchId === null) return;
 
-      let targetTouch = null;
+      let target = null;
       for (let i = 0; i < e.touches.length; i++) {
-        if (e.touches[i].identifier === touchId) {
-          targetTouch = e.touches[i];
-          break;
-        }
+        if (e.touches[i].identifier === touchId) { target = e.touches[i]; break; }
+      }
+      if (!target || !basePos) return;
+
+      e.preventDefault();
+
+      const dx = target.clientX - basePos.x;
+      const dy = target.clientY - basePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      let cx = dx, cy = dy;
+      if (dist > MAX_RADIUS) {
+        cx = (dx / dist) * MAX_RADIUS;
+        cy = (dy / dist) * MAX_RADIUS;
       }
 
-      if (!targetTouch) return;
+      setThumbOff({ x: cx, y: cy });
 
-      const dx = targetTouch.clientX - basePos.x;
-      const dy = targetTouch.clientY - basePos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      let clampedX = dx;
-      let clampedY = dy;
-
-      if (distance > maxRadius) {
-        clampedX = (dx / distance) * maxRadius;
-        clampedY = (dy / distance) * maxRadius;
-      }
-
-      const nextX = basePos.x + clampedX;
-      const nextY = basePos.y + clampedY;
-
-      setStickPos({ x: nextX, y: nextY });
-
-      // Normalize outputs between -1 and 1
-      let nx = clampedX / maxRadius;
-      let ny = clampedY / maxRadius;
-
-      // Apply deadzone configuration parameters
-      if (Math.abs(nx) < deadzone) nx = 0;
-      if (Math.abs(ny) < deadzone) ny = 0;
+      let nx = cx / MAX_RADIUS;
+      let ny = cy / MAX_RADIUS;
+      if (Math.abs(nx) < DEADZONE) nx = 0;
+      if (Math.abs(ny) < DEADZONE) ny = 0;
 
       onMove({ x: nx, y: ny });
     };
@@ -75,64 +67,92 @@ export default function VirtualJoystick({ onMove }) {
 
       let ended = false;
       for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === touchId) {
-          ended = true;
-          break;
-        }
+        if (e.changedTouches[i].identifier === touchId) { ended = true; break; }
       }
 
       if (ended) {
         setTouchId(null);
-        setVisible(false);
-        setStickPos({ x: 0, y: 0 });
-        setBasePos({ x: 0, y: 0 });
-        onMove({ x: 0, y: 0 }); // Auto reset coordinates on structural release
+        setBasePos(null);
+        setThumbOff({ x: 0, y: 0 });
+        onMove({ x: 0, y: 0 });
       }
     };
 
-    window.addEventListener('touchstart', handleTouchStart, { passive: false });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchstart',  handleTouchStart,  { passive: false });
+    window.addEventListener('touchmove',   handleTouchMove,   { passive: false });
+    window.addEventListener('touchend',    handleTouchEnd);
     window.addEventListener('touchcancel', handleTouchEnd);
 
     return () => {
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchstart',  handleTouchStart);
+      window.removeEventListener('touchmove',   handleTouchMove);
+      window.removeEventListener('touchend',    handleTouchEnd);
       window.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [touchId, basePos, onMove]);
 
-  if (!visible) return null;
+  const isActive = touchId !== null && basePos !== null;
+
+  // When active: position base where the finger landed
+  // When idle:   show ghost base in bottom-left corner
+  const baseLeft = isActive
+    ? basePos.x - JOYSTICK_SIZE / 2
+    : STATIC_X  - JOYSTICK_SIZE / 2;
+
+  const baseTop = isActive
+    ? basePos.y - JOYSTICK_SIZE / 2
+    : (typeof window !== 'undefined' ? window.innerHeight - STATIC_Y : 0) - JOYSTICK_SIZE / 2;
+
+  const thumbLeft = JOYSTICK_SIZE / 2 - THUMB_SIZE / 2 + (isActive ? thumbOff.x : 0);
+  const thumbTop  = JOYSTICK_SIZE / 2 - THUMB_SIZE / 2 + (isActive ? thumbOff.y : 0);
 
   return (
     <div
-      ref={containerRef}
       style={{
-        position: 'absolute',
-        left: basePos.x - joystickSize / 2,
-        top: basePos.y - joystickSize / 2,
-        width: `${joystickSize}px`,
-        height: `${joystickSize}px`,
+        position:     'fixed',
+        left:          baseLeft,
+        top:           baseTop,
+        width:        `${JOYSTICK_SIZE}px`,
+        height:       `${JOYSTICK_SIZE}px`,
         borderRadius: '50%',
-        background: 'rgba(255, 255, 255, 0.08)',
-        border: '2px solid rgba(139, 92, 246, 0.4)',
+        background:    isActive ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+        border:       `2px solid ${isActive ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.25)'}`,
         backdropFilter: 'blur(4px)',
         pointerEvents: 'none',
         zIndex: 1000,
+        transition:   isActive ? 'none' : 'opacity 0.2s',
+        opacity:       isActive ? 1 : 0.6,
       }}
     >
+      {/* Crosshair lines in ghost mode */}
+      {!isActive && (
+        <>
+          <div style={{
+            position: 'absolute', left: '50%', top: '20%', bottom: '20%',
+            width: 1, background: 'rgba(139,92,246,0.3)', transform: 'translateX(-50%)',
+          }} />
+          <div style={{
+            position: 'absolute', top: '50%', left: '20%', right: '20%',
+            height: 1, background: 'rgba(139,92,246,0.3)', transform: 'translateY(-50%)',
+          }} />
+        </>
+      )}
+
+      {/* Thumb */}
       <div
         style={{
-          position: 'absolute',
-          left: stickPos.x - basePos.x + joystickSize / 2 - thumbSize / 2,
-          top: stickPos.y - basePos.y + joystickSize / 2 - thumbSize / 2,
-          width: `${thumbSize}px`,
-          height: `${thumbSize}px`,
+          position:     'absolute',
+          left:          thumbLeft,
+          top:           thumbTop,
+          width:        `${THUMB_SIZE}px`,
+          height:       `${THUMB_SIZE}px`,
           borderRadius: '50%',
-          background: 'linear-gradient(135deg, #a78bfa, #7c3aed)',
-          boxShadow: '0 0 15px rgba(124, 58, 237, 0.6)',
-          transition: 'transform 0.05s linear',
+          background:    isActive
+            ? 'linear-gradient(135deg, #a78bfa, #7c3aed)'
+            : 'rgba(124,58,237,0.35)',
+          boxShadow:     isActive ? '0 0 15px rgba(124,58,237,0.7)' : 'none',
+          border:       `2px solid ${isActive ? 'transparent' : 'rgba(124,58,237,0.4)'}`,
+          transition:   isActive ? 'none' : 'all 0.15s',
         }}
       />
     </div>
