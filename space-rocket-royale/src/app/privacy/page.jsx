@@ -1,195 +1,207 @@
-'use client';
+export const metadata = {
+  title: "Privacy Policy",
+  description:
+    "Privacy Policy for Space Royale, an Android mobile game available on the Google Play Store.",
+  alternates: {
+    canonical: "/privacy",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
-export default function PrivacyPolicy() {
+const LAST_UPDATED = "July 1, 2026";
+const CONTACT_EMAIL = "[YOUR_CONTACT_EMAIL@EXAMPLE.COM]";
+
+export default function PrivacyPolicyPage() {
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: '#030712',
-      color: '#e2e8f0',
-      fontFamily: "'Georgia', 'Times New Roman', serif",
-      padding: '48px 24px',
-    }}>
-      <div style={{
-        maxWidth: 760,
-        margin: '0 auto',
-        lineHeight: 1.8,
-      }}>
-
+    <main className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+      <div className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
         {/* Header */}
-        <div style={{ marginBottom: 48, borderBottom: '1px solid #1e293b', paddingBottom: 32 }}>
-          <p style={{ fontSize: 13, color: '#64748b', letterSpacing: 2, marginBottom: 8, fontFamily: 'monospace' }}>
-            LEGAL DOCUMENT
+        <header className="mb-10 border-b border-neutral-200 pb-8 dark:border-neutral-800">
+          <p className="mb-2 text-xs font-semibold tracking-widest text-neutral-500 uppercase dark:text-neutral-400">
+            Legal Document
           </p>
-          <h1 style={{ fontSize: 36, fontWeight: 700, color: '#f1f5f9', margin: '0 0 12px', fontFamily: 'system-ui, sans-serif' }}>
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             Privacy Policy
           </h1>
-          <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
-            Application: <strong style={{ color: '#94a3b8' }}>Space Royale</strong>
-            &ensp;·&ensp;
-            Last Updated: <strong style={{ color: '#94a3b8' }}>June 22, 2026</strong>
+          <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+            Application: <strong className="font-semibold">Space Royale</strong>
+            <span className="mx-2">·</span>
+            Last Updated: <strong className="font-semibold">{LAST_UPDATED}</strong>
           </p>
-        </div>
+        </header>
 
-        {/* Introduction */}
-        <Section title="Introduction">
-          <p>
-            This Privacy Policy describes how Space Royale ("the Application," "we," "us," or "our") handles
-            information when you use our Android mobile game available on the Google Play Store. We are
-            committed to protecting your privacy. Please read this policy carefully to understand our
-            practices.
-          </p>
-          <p>
-            By downloading, installing, or playing Space Royale, you acknowledge that you have read and
-            understood this Privacy Policy.
-          </p>
-        </Section>
+        {/* Body */}
+        <article className="space-y-10 text-[15px] leading-7 text-neutral-800 sm:text-base dark:text-neutral-300">
+          <Section title="Introduction">
+            <p>
+              This Privacy Policy describes how Space Royale (&ldquo;the
+              Application,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or
+              &ldquo;our&rdquo;) handles information in connection with your
+              use of our Android mobile game, available on the Google Play
+              Store. We are committed to protecting your privacy, and this
+              policy explains our practices in plain terms.
+            </p>
+            <p>
+              By downloading, installing, or playing Space Royale, you
+              acknowledge that you have read and understood this Privacy
+              Policy.
+            </p>
+          </Section>
 
-        {/* Information Collection and Use */}
-        <Section title="Information Collection and Use">
-          <p>
-            <strong>Space Royale does not collect, transmit, store, or share any personally identifiable
-            information.</strong> The Application does not require you to create an account, log in, or
-            provide any personal details to play.
-          </p>
-          <p>Specifically, the Application does <strong>not</strong> collect:</p>
-          <BulletList items={[
-            'Your name, email address, phone number, or any contact information',
-            'Your location or GPS data',
-            'Device identifiers such as IMEI, advertising ID, or MAC address',
-            'Financial information or payment details',
-            'Contacts, calendar entries, photos, or files from your device',
-            'Usage analytics, crash reports, or performance telemetry beyond any basic services required by the Android operating system or Google Play platform',
-            'Any user-generated content (the Application contains no chat, messaging, or content submission features)',
-          ]} />
-          <p>
-            All game progress and settings (such as your score history, upgrades, and preferences) are
-            stored exclusively on your device using local device storage. This data never leaves your
-            device and is not accessible to us.
-          </p>
-        </Section>
+          <Section title="Information Collection and Use">
+            <p>
+              <strong>
+                Space Royale does not collect, store, transmit, or share any
+                personally identifiable information.
+              </strong>{" "}
+              The Application does not require you to create an account, log
+              in, or provide any personal details in order to play.
+            </p>
+            <p>Specifically, the Application does not collect:</p>
+            <ul className="list-disc space-y-2 pl-6 marker:text-neutral-400">
+              <li>Your name, email address, phone number, or other contact information</li>
+              <li>Your precise or approximate location</li>
+              <li>Your contacts, calendar entries, photos, or files</li>
+              <li>Financial information or payment details</li>
+              <li>Any user-generated content, since the Application contains no chat, messaging, or content-submission features</li>
+              <li>
+                Usage analytics, crash reports, or telemetry, beyond any
+                basic platform services that Google Play or the Android
+                operating system may require to distribute and operate the
+                Application
+              </li>
+            </ul>
+            <p>
+              Game progress, settings, and preferences are stored locally on
+              your device only. This data is never transmitted to us and is
+              not accessible by us.
+            </p>
+          </Section>
 
-        {/* Third-Party Services */}
-        <Section title="Third-Party Services">
-          <p>
-            Space Royale does not integrate third-party advertising networks, analytics platforms, social
-            media SDKs, or any other third-party data collection services.
-          </p>
-          <p>
-            The Application is distributed through the Google Play Store. When you download or install the
-            Application, Google Play's own terms of service and privacy policy apply to that transaction.
-            We have no control over the data Google may collect as part of operating the Google Play
-            platform. We encourage you to review Google's Privacy Policy at{' '}
-            <a
-              href="https://policies.google.com/privacy"
-              style={{ color: '#818cf8', textDecoration: 'underline' }}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              https://policies.google.com/privacy
-            </a>.
-          </p>
-          <p>
-            Beyond the Google Play Store distribution channel, no third-party services, SDKs, or
-            frameworks are embedded in the Application that collect user data.
-          </p>
-        </Section>
+          <Section title="Third-Party Services">
+            <p>
+              Space Royale does not integrate any third-party advertising
+              networks, analytics platforms, social media SDKs, or other
+              services that collect user data.
+            </p>
+            <p>
+              The Application is distributed exclusively through the Google
+              Play Store. Your download and installation of the Application
+              are subject to Google Play&rsquo;s own terms of service and
+              privacy policy, over which we have no control. We encourage you
+              to review Google&rsquo;s Privacy Policy at{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-600 underline underline-offset-2 hover:text-indigo-500 dark:text-indigo-400"
+              >
+                https://policies.google.com/privacy
+              </a>
+              .
+            </p>
+            <p>
+              Should the Application introduce advertising, analytics, or
+              in-app purchases in the future, this Privacy Policy will be
+              updated to disclose any relevant third-party services and the
+              data practices associated with them prior to such features
+              becoming active.
+            </p>
+          </Section>
 
-        {/* Children's Privacy */}
-        <Section title="Children's Privacy">
-          <p>
-            Space Royale is intended for a general audience and is designed to be suitable for players of
-            all ages. The Application does not knowingly collect personal information from children under
-            the age of 13 (or the applicable age of digital consent in your jurisdiction).
-          </p>
-          <p>
-            Because the Application collects no personal information from any user, it presents no
-            specific privacy risk to children. No account creation is required, no personal data is
-            solicited, and no user data is transmitted from the device.
-          </p>
-          <p>
-            If you are a parent or guardian and believe your child has somehow provided personal
-            information through the Application, please contact us at the address listed below and we will
-            take prompt steps to investigate and address your concern.
-          </p>
-        </Section>
+          <Section title="Children's Privacy">
+            <p>
+              Space Royale is intended for a general audience and is
+              designed to be suitable for players of all ages. The
+              Application does not knowingly collect personal information
+              from children under the age of 13, or the applicable age of
+              digital consent in your jurisdiction.
+            </p>
+            <p>
+              Because the Application does not collect personal information
+              from any user, it presents no particular privacy risk to
+              children: no account creation is required, no personal data is
+              requested, and no data is transmitted from the device.
+            </p>
+            <p>
+              If you are a parent or guardian and believe your child has
+              provided personal information through the Application, please
+              contact us using the information below, and we will take
+              prompt steps to investigate and address the matter.
+            </p>
+          </Section>
 
-        {/* Data Security */}
-        <Section title="Data Security">
-          <p>
-            Because Space Royale does not collect or transmit any personal information, there is no
-            personal data at risk of unauthorized access, disclosure, alteration, or destruction on our
-            servers or systems.
-          </p>
-          <p>
-            Game progress data stored locally on your device is subject to the security protections
-            provided by your Android device and operating system, including any screen lock, encryption,
-            or application sandboxing features you have enabled. We recommend keeping your device's
-            operating system up to date and enabling device security features to protect all data stored
-            on your device.
-          </p>
-        </Section>
+          <Section title="Data Security">
+            <p>
+              Because Space Royale does not collect or transmit personal
+              information, there is no personal data at risk of unauthorized
+              access, disclosure, alteration, or destruction on any servers
+              or systems operated by us.
+            </p>
+            <p>
+              Game data stored locally on your device is protected by the
+              security features of your Android device and operating system,
+              such as screen locks, encryption, and application sandboxing.
+              We recommend keeping your device and operating system up to
+              date and enabling available security features to help protect
+              all data stored on your device, including your local game
+              data.
+            </p>
+          </Section>
 
-        {/* Data Retention */}
-        <Section title="Data Retention">
-          <p>
-            We do not retain any personal data because we do not collect any. Local game data stored on
-            your device (such as saved game progress) remains on your device until you uninstall the
-            Application or manually clear its data through your device's application settings.
-            Uninstalling the Application will remove all locally stored game data.
-          </p>
-        </Section>
+          <Section title="Data Retention">
+            <p>
+              We do not retain any personal data, because none is collected.
+              Local game data, such as saved progress and settings, remains
+              on your device until you uninstall the Application or clear
+              its data through your device&rsquo;s application settings.
+              Uninstalling the Application removes all locally stored game
+              data.
+            </p>
+          </Section>
 
-        {/* Changes to This Privacy Policy */}
-        <Section title="Changes to This Privacy Policy">
-          <p>
-            We may update this Privacy Policy from time to time. When we do, we will revise the
-            "Last Updated" date at the top of this page. If material changes are made, we will notify
-            users through an updated version of the Application on the Google Play Store.
-          </p>
-          <p>
-            Your continued use of the Application after any changes to this Privacy Policy constitutes
-            your acceptance of the updated policy. We encourage you to review this Privacy Policy
-            periodically to stay informed about how we protect your privacy.
-          </p>
-        </Section>
+          <Section title="Changes to This Privacy Policy">
+            <p>
+              We may update this Privacy Policy from time to time to reflect
+              changes in the Application, applicable law, or our practices.
+              When we do, we will revise the &ldquo;Last Updated&rdquo; date
+              at the top of this page. If we make material changes, we will
+              take reasonable steps to notify users, such as through an
+              updated Application listing on the Google Play Store.
+            </p>
+            <p>
+              Your continued use of the Application after any changes to
+              this Privacy Policy constitutes your acceptance of the revised
+              policy. We encourage you to review this page periodically to
+              stay informed about how we handle privacy.
+            </p>
+          </Section>
 
-        {/* Contact Information */}
-        <Section title="Contact Information">
-          <p>
-            If you have any questions, concerns, or requests regarding this Privacy Policy or the
-            privacy practices of Space Royale, please contact us at:
-          </p>
-          <div style={{
-            background: '#0f172a',
-            border: '1px solid #1e293b',
-            borderRadius: 8,
-            padding: '20px 24px',
-            margin: '16px 0',
-            fontFamily: 'monospace',
-            fontSize: 14,
-          }}>
-            <p style={{ margin: '0 0 4px', color: '#94a3b8' }}>Email:</p>
-            <p style={{ margin: 0, color: '#818cf8' }}>[YOUR_CONTACT_EMAIL@EXAMPLE.COM]</p>
-          </div>
-          <p>
-            We will make reasonable efforts to respond to your inquiry within 30 days of receipt.
-          </p>
-        </Section>
+          <Section title="Contact Information">
+            <p>
+              If you have any questions, concerns, or requests regarding
+              this Privacy Policy or our privacy practices, please contact
+              us at:
+            </p>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-5 py-4 font-mono text-sm dark:border-neutral-800 dark:bg-neutral-900">
+              <p className="mb-1 text-neutral-500 dark:text-neutral-400">Email:</p>
+              <p className="text-indigo-600 dark:text-indigo-400">{CONTACT_EMAIL}</p>
+            </div>
+            <p>
+              We will make reasonable efforts to respond to inquiries within
+              30 days of receipt.
+            </p>
+          </Section>
+        </article>
 
         {/* Footer */}
-        <div style={{
-          marginTop: 64,
-          paddingTop: 24,
-          borderTop: '1px solid #1e293b',
-          textAlign: 'center',
-          color: '#334155',
-          fontSize: 13,
-          fontFamily: 'monospace',
-        }}>
-          <p style={{ margin: 0 }}>Space Royale &copy; 2026 &nbsp;·&nbsp; All rights reserved</p>
-          <p style={{ margin: '8px 0 0' }}>This privacy policy is effective as of June 22, 2026</p>
-        </div>
-
+        <footer className="mt-16 border-t border-neutral-200 pt-6 text-center text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-500">
+          <p>Space Royale &copy; 2026. All rights reserved.</p>
+          <p className="mt-1">This Privacy Policy is effective as of {LAST_UPDATED}.</p>
+        </footer>
       </div>
     </main>
   );
@@ -197,31 +209,11 @@ export default function PrivacyPolicy() {
 
 function Section({ title, children }) {
   return (
-    <section style={{ marginBottom: 40 }}>
-      <h2 style={{
-        fontSize: 20,
-        fontWeight: 700,
-        color: '#c4b5fd',
-        fontFamily: 'system-ui, sans-serif',
-        margin: '0 0 16px',
-        paddingBottom: 8,
-        borderBottom: '1px solid #1e293b',
-      }}>
+    <section>
+      <h2 className="mb-3 border-b border-neutral-200 pb-2 text-lg font-bold text-indigo-700 sm:text-xl dark:border-neutral-800 dark:text-indigo-400">
         {title}
       </h2>
-      <div style={{ color: '#cbd5e1', fontSize: 15 }}>
-        {children}
-      </div>
+      <div className="space-y-3">{children}</div>
     </section>
-  );
-}
-
-function BulletList({ items }) {
-  return (
-    <ul style={{ paddingLeft: 20, margin: '12px 0', color: '#94a3b8' }}>
-      {items.map((item, i) => (
-        <li key={i} style={{ marginBottom: 8, lineHeight: 1.6 }}>{item}</li>
-      ))}
-    </ul>
   );
 }
