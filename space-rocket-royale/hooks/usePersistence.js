@@ -9,7 +9,7 @@ import { getDailySeed, generateDailyMissions } from '../systems/MetaProgression.
 import { GAME_MODES } from '../constants/GameModes.js';
 
 const SAVE_KEY = 'srr_save';
-const CURRENT_SAVE_VERSION = 4;
+const CURRENT_SAVE_VERSION = 5;
 
 function defaultBestScores() {
   const scores = {};
@@ -29,6 +29,7 @@ const DEFAULT_SAVE = {
 
   gold:   0,
   rubies: 0,
+  gems:   0, // scarce premium currency — see systems/MetaProgression.js GEM_DROPS
 
   gearInventory: [],
   gearLoadout:   null,
@@ -169,6 +170,15 @@ function migrate(raw) {
     };
   }
 
+  // v4 → v5
+  if (s.version < 5) {
+    s = {
+      ...s,
+      version: 5,
+      gems: s.gems ?? DEFAULT_SAVE.gems,
+    };
+  }
+
   return s;
 }
 
@@ -264,6 +274,17 @@ export function usePersistence() {
 
   const spendRubies = useCallback((amount) => {
     update(prev => ({ ...prev, rubies: Math.max(0, (prev.rubies ?? 0) - amount) }));
+  }, [update]);
+
+  // ── Gems (scarce premium currency) ─────────────────────────────────────
+
+  const addGems = useCallback((amount) => {
+    if (!amount) return;
+    update(prev => ({ ...prev, gems: (prev.gems ?? 0) + amount }));
+  }, [update]);
+
+  const spendGems = useCallback((amount) => {
+    update(prev => ({ ...prev, gems: Math.max(0, (prev.gems ?? 0) - amount) }));
   }, [update]);
 
   // ── Account XP ──────────────────────────────────────────────────────────
@@ -374,6 +395,7 @@ export function usePersistence() {
       version: CURRENT_SAVE_VERSION,
       // Keep permanent stuff
       rubies:              prev.rubies,
+      gems:                prev.gems,
       accountXP:           prev.accountXP,
       researchPoints:      prev.researchPoints,
       unlockedAchievements:prev.unlockedAchievements,
@@ -538,6 +560,10 @@ export function usePersistence() {
     // Rubies
     addRubies,
     spendRubies,
+
+    // Gems
+    addGems,
+    spendGems,
 
     // Account XP
     addAccountXP,

@@ -10,9 +10,9 @@ import { ChestOpenScreen } from '../../ui/screens/ChestOpenScreen';
 import { usePersistence } from '../../hooks/usePersistence';
 import { useAbilities } from '../../hooks/useAbilities';
 import { RARITY_COLORS } from '../../constants/EquipmentData';
-import { ABILITY_RARITY_COLORS } from '../../constants/AbilityData';
+import AbilityHUD from '../../ui/hud/AbilityHUD';
 import { computeShopStats } from '../../systems/ShopSystem';
-import { computeAllMetaStats } from '../../systems/MetaProgression';
+import { computeAllMetaStats, FIRST_CLEAR_GEM_BONUS } from '../../systems/MetaProgression';
 import VirtualJoystick from '../../ui/mobile/VirtualJoystick';
 import MobileAbilityBar from '../../ui/mobile/MobileAbilityBar';
 import { useMobileDetect, isMobileOrTablet } from '../../hooks/useMobileDetect';
@@ -818,6 +818,25 @@ function RubyPickupFlash({ amount }) {
   );
 }
 
+// ── Gem pickup notification ─────────────────────────────────────────────────
+// Gems are intentionally rare (see MetaProgression.GEM_DROPS), so this flash
+// is styled to feel more special than the ruby one.
+
+function GemPickupFlash({ amount }) {
+  if (!amount) return null;
+  return (
+    <div style={{
+      position:'absolute', top:'42%', left:'50%', transform:'translateX(-50%)',
+      color:'#22d3ee', fontWeight:'900', fontSize:'1.6rem',
+      fontFamily:'"Courier New",monospace', zIndex:50, pointerEvents:'none',
+      textShadow:'0 0 24px #22d3ee, 0 0 40px #67e8f9',
+      animation:'fadeUp 1.4s ease-out forwards',
+    }}>
+      💠 +{amount} GEMS
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
@@ -831,7 +850,7 @@ export default function Page() {
   const {
     save, getBestScore, recordRunResult,
     addRunLootToProfile, addRunAbilitiesToProfile,
-    addRubies, addAccountXP, addResearchPoints, spendResearchPoints,
+    addRubies, addGems, addAccountXP, addResearchPoints, spendResearchPoints,
     unlockTechNode, unlockAchievement, updateAchievementStat, setAchievementStats,
     updateMissionProgress, completeMission,
     addPet, setActivePet,
@@ -948,15 +967,16 @@ export default function Page() {
         finalScore, finalKills, finalLevel, finalTime, finalWave,
         finalBossesKilled, finalGold, finalXP,
         runLoot, runAbilityLoot,
-        finalRubies, finalAccountXP, finalMode, runKillStats, runMinutes,
+        finalRubies, finalGems, finalAccountXP, finalMode, runKillStats, runMinutes,
       } = update;
 
       // Persist loot
       if (runLoot?.length)        addRunLootToProfile(runLoot);
       if (runAbilityLoot?.length) addRunAbilitiesToProfile(runAbilityLoot);
 
-      // Persist rubies & account XP
+      // Persist rubies, gems & account XP
       if (finalRubies > 0)     addRubies(finalRubies);
+      if (finalGems   > 0)     addGems(finalGems);
       if (finalAccountXP > 0)  addAccountXP(finalAccountXP);
 
       // Grant research points based on account level (level * 2 per run)
@@ -995,9 +1015,10 @@ export default function Page() {
         });
       }
 
-      // Track mode played
+      // Track mode played — first-ever clear of a mode earns a small Gem bonus
       if (finalMode && !(save.achievementStats?.modes_played || []).includes(finalMode)) {
         updateAchievementStat('modes_played', finalMode);
+        addGems(FIRST_CLEAR_GEM_BONUS);
       }
 
       // Show loot summaries
@@ -1018,7 +1039,7 @@ export default function Page() {
 
     setGameState(prev => ({ ...prev, ...update }));
   }, [
-    addRubies, addAccountXP, addRunLootToProfile, addRunAbilitiesToProfile,
+    addRubies, addGems, addAccountXP, addRunLootToProfile, addRunAbilitiesToProfile,
     recordRunResult, setAchievementStats, updateAchievementStat,
     selectedMode, save.achievementStats,
   ]);
@@ -1073,7 +1094,7 @@ export default function Page() {
     eng.startGame(selectedMode);
     engineRef.current = eng;
 
-    return () => { eng.stop?.(); engineRef.current = null; };
+    return () => { eng.destroy?.(); engineRef.current = null; };
   }, [screen]);  // eslint-disable-line
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -1189,7 +1210,7 @@ export default function Page() {
   // ── IN GAME ──────────────────────────────────────────────────────────────
   if (screen === 'game') {
     const engine = engineRef.current;
-    const { shopSlots, shopTimer, sessionRubies, rubyPickup } = gameState;
+    const { shopSlots, shopTimer, sessionRubies, rubyPickup, sessionGems, gemPickup } = gameState;
     return (
       <div ref={containerRef} style={{ position:'fixed', inset:0, background:'#030712', touchAction:'none' }}>
         <canvas
@@ -1203,21 +1224,26 @@ export default function Page() {
         {detect.isTouch && <VirtualJoystick onMove={handleJoystickMove} />}
         {onMobile && engine && <MobileAbilityBar state={gameState} engine={engine} />}
 
-        {/* Ruby counter in HUD — hidden on mobile to avoid crowding top-right */}
+        {/* Ruby / Gem counters in HUD — hidden on mobile to avoid crowding top-right */}
         {!onMobile && (
           <div style={{
             position:'absolute', top:16, right:16, marginTop:80,
             color:'#e879f9', fontWeight:'700', fontSize:'0.85rem',
             fontFamily:'"Courier New",monospace', pointerEvents:'none',
+            textAlign:'right',
           }}>
-            💎 {(sessionRubies||0)} run rubies
+            <div>💎 {(sessionRubies||0)} run rubies</div>
+            {/* Gems are rare — only show the line once one's actually been earned this run */}
+            {sessionGems > 0 && (
+              <div style={{ color:'#22d3ee', marginTop:2 }}>💠 {sessionGems} run gems</div>
+            )}
           </div>
         )}
 
-        {/* Ability HUD */}
-        {engine && (
-          <div style={{ position:'absolute', bottom:20, right:16, pointerEvents:'auto' }}>
-            {/* Abilities are rendered via the existing AbilityHUD which lives in page.js already */}
+        {/* Ability HUD — desktop only; mobile uses MobileAbilityBar in the same corner */}
+        {engine && !onMobile && (
+          <div style={{ position:'absolute', bottom:20, right:16, pointerEvents:'none' }}>
+            <AbilityHUD state={gameState} />
           </div>
         )}
 
@@ -1262,8 +1288,9 @@ export default function Page() {
           </div>
         )}
 
-        {/* Ruby pickup flash */}
+        {/* Ruby / Gem pickup flash */}
         {gameState.rubyPickup && <RubyPickupFlash amount={gameState.rubyPickup} />}
+        {gameState.gemPickup && <GemPickupFlash amount={gameState.gemPickup} />}
 
         {/* Chest open animation screen */}
         {chestToOpen && (

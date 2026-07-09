@@ -7,6 +7,7 @@ import {
   ABILITY_RARITIES,
   SECRET_ABILITY_IDS,
 } from '../constants/AbilityData.js';
+import { reweightWeightsByDifficulty } from '../constants/DifficultyData.js';
 
 let _instanceCounter = Date.now();
 function newInstanceId() { return `ab_${++_instanceCounter}`; }
@@ -69,16 +70,19 @@ export function generateAbility({ rarity, wave = 1, source = 'unknown', forceId 
 }
 
 // ─── BOSS ABILITY DROPS ───────────────────────────────────────────────────────
-export function generateBossAbilityDrops(bossName, wave, hasBossHunter = false) {
+// difficultyRating reweights proportions within the rarities a given boss's
+// table already allows (weight 0 entries stay at 0) — see DifficultyData.js.
+export function generateBossAbilityDrops(bossName, wave, hasBossHunter = false, difficultyRating = 3) {
   const table = BOSS_ABILITY_DROP_TABLES[bossName];
   if (!table) return [];
 
   let count = table.count;
   if (hasBossHunter) count += table.bonusOnBossHunter || 0;
 
+  const scaledWeights = reweightWeightsByDifficulty(table.weights, difficultyRating);
   const results = [];
   for (let i = 0; i < count; i++) {
-    const rarity = rollRarity(table.weights);
+    const rarity = rollRarity(scaledWeights);
     const item = generateAbility({ rarity, wave, source: `Boss: ${bossName}` });
     if (item) results.push(item);
   }
@@ -86,8 +90,8 @@ export function generateBossAbilityDrops(bossName, wave, hasBossHunter = false) 
 }
 
 // ─── CHEST ABILITY DROP ───────────────────────────────────────────────────────
-export function generateChestAbilityDrop(wave) {
-  const weights = getWaveWeights(wave);
+export function generateChestAbilityDrop(wave, difficultyRating = 3) {
+  const weights = reweightWeightsByDifficulty(getWaveWeights(wave), difficultyRating);
   const rarity  = rollRarity(weights);
   return generateAbility({ rarity, wave, source: 'Chest' });
 }

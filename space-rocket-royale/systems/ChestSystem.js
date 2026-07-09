@@ -1,6 +1,8 @@
 // systems/ChestSystem.js
 // Chest types, reward tables, and opening logic for Space Royale.
 
+import { reweightArrayByDifficulty } from '../constants/DifficultyData.js';
+
 // ── Chest definitions ──────────────────────────────────────────────────────
 
 export const CHEST_TYPES = [
@@ -145,14 +147,14 @@ function weightedIndex(weights) {
  * Generate chest rewards (coins, rubies, XP, rarity indices for gear/abilities/pet).
  * Gear and ability rarity indices map to constants/EquipmentData RARITIES and AbilityData RARITIES.
  * @param {string} chestId
- * @param {object} opts - { lootQuality: 0-1 bonus, rubyMult: 1.0 }
+ * @param {object} opts - { lootQuality: 0-1 bonus, rubyMult: 1.0, difficultyRating: 1-5 }
  * @returns {object} rewards
  */
 export function generateChestRewards(chestId, opts = {}) {
   const def = CHEST_MAP[chestId];
   if (!def) return { gold: 50, xp: 100, rubies: 0, items: [] };
 
-  const { lootQuality = 0, rubyMult = 1 } = opts;
+  const { lootQuality = 0, rubyMult = 1, difficultyRating = 3 } = opts;
   const r = def.rewards;
   const items = [];
 
@@ -167,22 +169,22 @@ export function generateChestRewards(chestId, opts = {}) {
 
   // Gear drop
   if (r.gear && Math.random() < r.gear.chance) {
-    const adjusted = boostWeights(r.gear.rarityWeights, lootQuality);
+    const adjusted = boostWeights(reweightArrayByDifficulty(r.gear.rarityWeights, difficultyRating), lootQuality);
     items.push({ type: 'gear', rarityIndex: weightedIndex(adjusted) });
   }
   // Bonus gear
   if (r.bonusGear && Math.random() < r.bonusGear.chance) {
-    const adjusted = boostWeights(r.bonusGear.rarityWeights, lootQuality);
+    const adjusted = boostWeights(reweightArrayByDifficulty(r.bonusGear.rarityWeights, difficultyRating), lootQuality);
     items.push({ type: 'gear', rarityIndex: weightedIndex(adjusted) });
   }
   // Ability drop
   if (r.ability && Math.random() < r.ability.chance) {
-    const adjusted = boostWeights(r.ability.rarityWeights, lootQuality);
+    const adjusted = boostWeights(reweightArrayByDifficulty(r.ability.rarityWeights, difficultyRating), lootQuality);
     items.push({ type: 'ability', rarityIndex: weightedIndex(adjusted) });
   }
   // Pet drop
   if (r.pet && Math.random() < r.pet.chance) {
-    const adjusted = boostWeights(r.pet.rarityWeights, lootQuality);
+    const adjusted = boostWeights(reweightArrayByDifficulty(r.pet.rarityWeights, difficultyRating), lootQuality);
     items.push({ type: 'pet', rarityIndex: weightedIndex(adjusted) });
   }
 

@@ -61,8 +61,8 @@ function _placeDrop(pool, pos, ability, vel, spawnParticlesFn) {
 }
 
 // Boss drop — multiple abilities in arc
-export function spawnBossAbilityDrops(pool, bossPos, bossName, wave, hasBossHunter, spawnParticlesFn) {
-  const abilities = generateBossAbilityDrops(bossName, wave, hasBossHunter);
+export function spawnBossAbilityDrops(pool, bossPos, bossName, wave, hasBossHunter, spawnParticlesFn, difficultyRating = 3) {
+  const abilities = generateBossAbilityDrops(bossName, wave, hasBossHunter, difficultyRating);
   if (!abilities.length) return [];
   abilities.forEach((ability, i) => {
     const angle = (i / abilities.length) * TAU + rand(-0.3, 0.3);
@@ -75,8 +75,8 @@ export function spawnBossAbilityDrops(pool, bossPos, bossName, wave, hasBossHunt
 }
 
 // Chest drop — single ability
-export function spawnChestAbilityDrop(pool, chestPos, wave, spawnParticlesFn) {
-  const ability = generateChestAbilityDrop(wave);
+export function spawnChestAbilityDrop(pool, chestPos, wave, spawnParticlesFn, difficultyRating = 3) {
+  const ability = generateChestAbilityDrop(wave, difficultyRating);
   if (!ability) return null;
   _placeDrop(pool, chestPos, ability, null, spawnParticlesFn);
   return ability;

@@ -438,6 +438,12 @@ export function getModeRules(modeId) {
   return MODE_MAP[modeId]?.rules || GAME_MODES[0].rules;
 }
 
+// 1 (easy) - 5 (extreme). Drives rarity odds for equipment/ability/chest/boss
+// drops via constants/DifficultyData.js — see GameEngine.startGame().
+export function getModeDifficulty(modeId) {
+  return MODE_MAP[modeId]?.difficultyRating ?? GAME_MODES[0].difficultyRating ?? 3;
+}
+
 export function getModeInitialState(modeId) {
   const base = {
     modeId,

@@ -8,6 +8,7 @@ import {
   FLAT_STATS, BOSS_DROP_TABLES, WAVE_RARITY_TABLE, MYTHIC_EFFECTS,
   RARITY_ORDER, CATEGORY_SLOT_MAP,
 } from '../constants/EquipmentData.js';
+import { reweightPoolByDifficulty } from '../constants/DifficultyData.js';
 
 // ─── RNG HELPERS ─────────────────────────────────────────────────────────────
 function rand(min, max) { return Math.random() * (max - min) + min; }
@@ -170,7 +171,11 @@ export function generateSecretItem(secretId, source = 'secret') {
 }
 
 // ─── BOSS DROP GENERATION ────────────────────────────────────────────────────
-export function generateBossDrops(bossName, wave = 1) {
+// difficultyRating (1-5, from the active game mode) reweights *within* each
+// boss's curated rarity pool — it never lets a boss drop a rarity outside its
+// own table (e.g. Asteroid Titan still can't drop Legendary+), it just makes
+// the eligible higher tiers noticeably more likely the harder the mode is.
+export function generateBossDrops(bossName, wave = 1, difficultyRating = 3) {
   const table = BOSS_DROP_TABLES[bossName];
   if (!table) return [];
 
@@ -187,9 +192,10 @@ export function generateBossDrops(bossName, wave = 1) {
   // Fill remaining with blueprint rolls
   const remaining = Math.max(0, dropCount - drops.length);
   const pool = table.blueprintPool;
+  const scaledRarityPool = reweightPoolByDifficulty(table.rarityPool, difficultyRating);
 
   for (let i = 0; i < remaining; i++) {
-    const rarity = rollWeighted(table.rarityPool);
+    const rarity = rollWeighted(scaledRarityPool);
     const blueprintId = randItem(pool);
     const item = generateItem({ blueprintId, rarity, wave, source: bossName });
     if (item) drops.push(item);
@@ -199,9 +205,13 @@ export function generateBossDrops(bossName, wave = 1) {
 }
 
 // ─── CHEST DROP GENERATION ───────────────────────────────────────────────────
-export function generateChestDrop(wave = 1) {
+// The wave table still gates *which* rarities are reachable this early in a
+// run (no Mythic drops at wave 1 no matter how hard the mode is); difficulty
+// reweights the odds among whatever the wave has unlocked so far.
+export function generateChestDrop(wave = 1, difficultyRating = 3) {
   const entry = WAVE_RARITY_TABLE.find(t => wave <= t.maxWave) || WAVE_RARITY_TABLE[WAVE_RARITY_TABLE.length - 1];
-  const rarity = rollWeighted(entry.pool);
+  const scaledPool = reweightPoolByDifficulty(entry.pool, difficultyRating);
+  const rarity = rollWeighted(scaledPool);
   const eligibleBlueprints = ALL_BLUEPRINTS.filter(b => RARITY_ORDER[b.minRarity] <= RARITY_ORDER[rarity]);
   if (eligibleBlueprints.length === 0) return null;
   const blueprint = randItem(eligibleBlueprints);

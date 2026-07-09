@@ -34,9 +34,10 @@ import { renderEnemy } from '../../../systems/EnemyRenderer.js';
 import { WaveDirector, configureEnemy, updateEnemyAI } from '../../../systems/WaveDirector.js';
 import { BOSSES as BOSS_DEFS, selectBoss, scaleBossHp } from '../../../systems/BossData.js';
 import { renderBoss } from '../../../systems/BossRenderer.js';
-import { MODE_MAP, getModeRules, getModeInitialState } from '../../../constants/GameModes.js';
+import { MODE_MAP, getModeRules, getModeInitialState, getModeDifficulty } from '../../../constants/GameModes.js';
+import { getInitialAbilityLoadout } from '../../../constants/AbilityData.js';
 import { ShopManager, computeShopStats } from '../../../systems/ShopSystem.js';
-import { rollRubyDrop } from '../../../systems/MetaProgression.js';
+import { rollRubyDrop, rollGemDrop } from '../../../systems/MetaProgression.js';
 import { generateChestRewards, BOSS_CHEST_TABLE } from '../../../systems/ChestSystem.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -260,6 +261,7 @@ export class GameEngine {
     this.modeRules        = getModeRules('classic');
     this.modeState        = getModeInitialState('classic');
     this.sessionRubies    = 0;   // rubies earned this run
+    this.sessionGems      = 0;   // scarce premium currency earned this run (rare boss drops only)
     this.runKillStats     = {    // tracked for missions/achievements
       kills: 0, elites: 0, bosses: 0, crits: 0,
       gold: 0, gear: 0, abilities: 0, shopBuys: 0,
@@ -446,6 +448,11 @@ export class GameEngine {
   startGame(mode='endless') {
     this.mode         = mode;
     this.player       = createPlayer(0, 0);
+    // Wire the equipped ability loadout (set on the engine by page.js before
+    // startGame() is called) onto the fresh player object. Without this, the
+    // player object has no abilityLoadout and Z/X/R presses silently no-op.
+    this.player.abilityLoadout   = this.abilityLoadout || getInitialAbilityLoadout();
+    this.player.abilityCooldowns = {};
     this.enemies      = [];
     this.activeDrones = [];
     this.boss         = null;
@@ -468,11 +475,15 @@ export class GameEngine {
     this.activeEvent  = null;
     this.nextEventTime= rand(60,120);
     this.sessionRubies = 0;
+    this.sessionGems   = 0;
     this.runKillStats  = { kills: 0, elites: 0, bosses: 0, crits: 0, gold: 0, gear: 0, abilities: 0, shopBuys: 0 };
 
     // ── Game Mode setup ───────────────────────────────────────────────────
     this.modeRules = getModeRules(mode);
     this.modeState = getModeInitialState(mode);
+    // 1-5 rating that scales equipment/ability/chest/boss rarity odds — see
+    // constants/DifficultyData.js. Harder modes roll better loot.
+    this.difficultyRating = getModeDifficulty(mode);
     const bossInterval = this.modeRules.bossInterval ?? 60; // in seconds (sessionTime is also seconds)
     this.nextBossTime  = bossInterval;
 
@@ -519,6 +530,10 @@ export class GameEngine {
         this.player.drones = (this.player.drones || 0) + this.player.gearDrones;
       }
     }
+
+    // Apply one-time passive ability bonuses (Quantum Magazine, Drone Commander,
+    // Treasure Scanner, Boss Hunter, etc.) now that the loadout + equipment are set.
+    applyPassiveAbilities(this.player);
 
     this.pods = [];
     this._initPods();
@@ -1020,7 +1035,8 @@ export class GameEngine {
     // Spawn equipment drops
     const items = spawnBossEquipmentDrops(
       this.equipDrops, bossPos, bossName, this.wave,
-      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life),
+      this.difficultyRating
     );
     if (items.length > 0) {
       this.onStateChange({ bossDropItems: items, bossDropBossName: bossName });
@@ -1033,7 +1049,8 @@ export class GameEngine {
                               this.abilityLoadout?.passive3?.effectKey === 'BOSS_HUNTER');
     spawnBossAbilityDrops(
       this.abilityDrops, bossPos, bossName, this.wave, hasBossHunter,
-      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+      (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life),
+      this.difficultyRating
     );
 
     if (this.player) this.player._cosmicBossKills = (this.player._cosmicBossKills || 0) + 1;
@@ -1054,6 +1071,18 @@ export class GameEngine {
       this.sessionRubies += bossRubies;
       this.onStateChange({ rubyPickup: bossRubies });
       setTimeout(() => this.onStateChange({ rubyPickup: null }), 2000);
+    }
+
+    // Gems — scarce premium currency, only a chance on the hardest boss types
+    // (raid bosses / world bosses). Regular bosses never drop gems.
+    const bossGemType = this.modeRules.raidMode ? 'raid_boss' : (this.modeRules.huntMode ? 'world_boss' : null);
+    if (bossGemType) {
+      const bossGems = rollGemDrop(bossGemType);
+      if (bossGems > 0) {
+        this.sessionGems += bossGems;
+        this.onStateChange({ gemPickup: bossGems });
+        setTimeout(() => this.onStateChange({ gemPickup: null }), 2200);
+      }
     }
 
     this.boss.active = false;
@@ -1126,6 +1155,7 @@ export class GameEngine {
         runAbilityLoot:    abilityLoot,
         // New fields for meta progression
         finalRubies:       this.sessionRubies,
+        finalGems:         this.sessionGems,
         finalAccountXP:    accountXPEarned,
         finalMode:         this.mode,
         runKillStats:      { ...this.runKillStats },
@@ -1211,7 +1241,7 @@ export class GameEngine {
     const rubyMult   = (this.modeRules?.rubyDropMult || 1) * (1 + (this.metaStats?.rubyDropMult || 0));
     const lootQual   = (this.player?.lootQuality || 0) + (this.metaStats?.lootQuality || 0);
     const chestId    = chest.chestSystemId || this._tierKeyToChestId(chest.tier);
-    const chestRewards = generateChestRewards(chestId, { lootQuality: lootQual, rubyMult });
+    const chestRewards = generateChestRewards(chestId, { lootQuality: lootQual, rubyMult, difficultyRating: this.difficultyRating });
 
     if (chestRewards.rubies > 0) {
       this.sessionRubies += chestRewards.rubies;
@@ -1226,7 +1256,8 @@ export class GameEngine {
     if (Math.random() < rewards.equipChance) {
       spawnChestEquipmentDrop(
         this.equipDrops, chest.pos, this.wave,
-        (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+        (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life),
+        this.difficultyRating
       );
     }
 
@@ -1234,7 +1265,8 @@ export class GameEngine {
     if (Math.random() < rewards.abilityChance) {
       spawnChestAbilityDrop(
         this.abilityDrops, chest.pos, this.wave,
-        (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life)
+        (pos, color, count, speed, life) => this._spawnParticles(pos, color, count, speed, life),
+        this.difficultyRating
       );
     }
 
@@ -1365,7 +1397,7 @@ export class GameEngine {
 
   _activateAbilitySlot(slotKey) {
     const p = this.player;
-    if (!p || this.gameOver || this.shopOpen) return;
+    if (!p || p.dead || this.gameOver || this.shopOpen || this.paused) return;
     const ability = p.abilityLoadout && p.abilityLoadout[slotKey];
     if (!ability) return;
 
@@ -1552,6 +1584,7 @@ export class GameEngine {
       temporalAnchorReady: this.player._temporalAnchorState === 'recording',
       // Meta / shop
       sessionRubies: this.sessionRubies,
+      sessionGems:   this.sessionGems,
       shopTimer:     this.shopManager ? this.shopManager.getTimerDisplay() : 25,
       shopSlots:     this.shopManager ? this.shopManager.getSlots() : [],
       modeId:        this.mode,

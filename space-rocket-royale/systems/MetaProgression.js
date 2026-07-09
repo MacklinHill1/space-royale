@@ -27,6 +27,37 @@ export function rollRubyDrop(type, mult = 1) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GEMS (Premium Currency)
+// ─────────────────────────────────────────────────────────────────────────────
+// Gems are deliberately scarce — unlike Rubies, they are NOT a reliable reward
+// for regular play. Normal kills/chests/waves never roll gems. They only come
+// from: rare boss-kill chance (harder content only), first-time mode clears,
+// achievement/level/mission milestones (reward tables below), and later the
+// Battle Pass / IAP top-ups (#9 monetization prep — not implemented yet).
+
+export const GEM_DROPS = {
+  // Only the hardest boss encounters have a chance to drop gems, and even
+  // then it's a small chance of a small amount.
+  regular_boss: null,                       // never
+  elite_boss:   null,                       // never
+  raid_boss:    { chance: 0.06, range: [1, 2] },
+  world_boss:   { chance: 0.15, range: [2, 5] },
+};
+
+/** Returns 0 most of the time — gems are a rare bonus, not a guaranteed drop. */
+export function rollGemDrop(type, mult = 1) {
+  const entry = GEM_DROPS[type];
+  if (!entry) return 0;
+  if (Math.random() >= entry.chance) return 0;
+  const [min, max] = entry.range;
+  return Math.round((min + Math.random() * (max - min)) * mult);
+}
+
+// Awarded once per game mode the very first time it's ever completed.
+// Checked against achievementStats.modes_played (already tracked today).
+export const FIRST_CLEAR_GEM_BONUS = 3;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ACCOUNT LEVEL
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -69,13 +100,13 @@ export const ACCOUNT_XP_REWARDS = {
 // Level-up rewards
 export const LEVEL_REWARDS = [
   { level: 5,  reward: { rubies: 50,  title: 'Space Cadet' } },
-  { level: 10, reward: { rubies: 100, researchPoints: 5, title: 'Pilot' } },
+  { level: 10, reward: { rubies: 100, gems: 1, researchPoints: 5, title: 'Pilot' } },
   { level: 15, reward: { rubies: 150, researchPoints: 10 } },
-  { level: 20, reward: { rubies: 250, title: 'Commander', researchPoints: 15 } },
+  { level: 20, reward: { rubies: 250, gems: 2, title: 'Commander', researchPoints: 15 } },
   { level: 25, reward: { rubies: 300, researchPoints: 20 } },
-  { level: 30, reward: { rubies: 500, title: 'Admiral', researchPoints: 25 } },
-  { level: 40, reward: { rubies: 750, researchPoints: 40 } },
-  { level: 50, reward: { rubies: 1000, title: 'Galactic Legend', researchPoints: 60, cosmicShards: 5 } },
+  { level: 30, reward: { rubies: 500, gems: 3, title: 'Admiral', researchPoints: 25 } },
+  { level: 40, reward: { rubies: 750, gems: 4, researchPoints: 40 } },
+  { level: 50, reward: { rubies: 1000, gems: 8, title: 'Galactic Legend', researchPoints: 60, cosmicShards: 5 } },
 ];
 
 export function getLevelReward(level) {
@@ -91,7 +122,7 @@ export const ACHIEVEMENTS = [
   { id: 'first_blood',         cat: 'Combat',      name: 'First Blood',             desc: 'Kill your first enemy',                          goal: 1,      stat: 'total_kills',       reward: { rubies: 10 } },
   { id: 'centurion',           cat: 'Combat',      name: 'Centurion',               desc: 'Kill 100 enemies in a single run',               goal: 100,    stat: 'run_kills',         reward: { rubies: 25 } },
   { id: 'unstoppable',         cat: 'Combat',      name: 'Unstoppable',             desc: 'Kill 500 total enemies',                         goal: 500,    stat: 'total_kills',       reward: { rubies: 30 } },
-  { id: 'killing_machine',     cat: 'Combat',      name: 'Killing Machine',         desc: 'Kill 5,000 total enemies',                       goal: 5000,   stat: 'total_kills',       reward: { rubies: 100, title: 'Killing Machine' } },
+  { id: 'killing_machine',     cat: 'Combat',      name: 'Killing Machine',         desc: 'Kill 5,000 total enemies',                       goal: 5000,   stat: 'total_kills',       reward: { rubies: 100, gems: 2, title: 'Killing Machine' } },
   { id: 'elite_hunter',        cat: 'Combat',      name: 'Elite Hunter',            desc: 'Kill 50 elite enemies',                          goal: 50,     stat: 'total_elites',      reward: { rubies: 40 } },
   { id: 'crit_master',         cat: 'Combat',      name: 'Critical Strike',         desc: 'Land 500 critical hits',                         goal: 500,    stat: 'total_crits',       reward: { rubies: 35, researchPoints: 5 } },
   { id: 'survivor_5',          cat: 'Combat',      name: 'Survivor I',              desc: 'Survive for 5 minutes in Classic',               goal: 5,      stat: 'run_minutes',       reward: { rubies: 20 } },
@@ -101,36 +132,36 @@ export const ACHIEVEMENTS = [
   // ── Bosses ───────────────────────────────────────────────────────────────
   { id: 'boss_slayer',         cat: 'Bosses',      name: 'Boss Slayer',             desc: 'Kill your first boss',                           goal: 1,      stat: 'total_bosses',      reward: { rubies: 20 } },
   { id: 'boss_veteran',        cat: 'Bosses',      name: 'Boss Veteran',            desc: 'Kill 25 bosses total',                           goal: 25,     stat: 'total_bosses',      reward: { rubies: 75 } },
-  { id: 'boss_destroyer',      cat: 'Bosses',      name: 'Boss Destroyer',          desc: 'Kill 100 bosses total',                          goal: 100,    stat: 'total_bosses',      reward: { rubies: 250, title: 'Boss Destroyer' } },
-  { id: 'all_bosses',          cat: 'Bosses',      name: 'Encyclopedia of Ruin',    desc: 'Kill every unique boss at least once',           goal: 7,      stat: 'unique_bosses',     reward: { rubies: 100, researchPoints: 20 } },
-  { id: 'raid_clear',          cat: 'Bosses',      name: 'Raid Master',             desc: 'Complete a Raid Bosses run',                     goal: 1,      stat: 'raids_completed',   reward: { rubies: 75 } },
-  { id: 'world_boss_hunter',   cat: 'Bosses',      name: 'World Boss Hunter',       desc: 'Kill 10 world bosses',                           goal: 10,     stat: 'world_bosses',      reward: { rubies: 200, title: 'World Breaker' } },
+  { id: 'boss_destroyer',      cat: 'Bosses',      name: 'Boss Destroyer',          desc: 'Kill 100 bosses total',                          goal: 100,    stat: 'total_bosses',      reward: { rubies: 250, gems: 5, title: 'Boss Destroyer' } },
+  { id: 'all_bosses',          cat: 'Bosses',      name: 'Encyclopedia of Ruin',    desc: 'Kill every unique boss at least once',           goal: 7,      stat: 'unique_bosses',     reward: { rubies: 100, gems: 3, researchPoints: 20 } },
+  { id: 'raid_clear',          cat: 'Bosses',      name: 'Raid Master',             desc: 'Complete a Raid Bosses run',                     goal: 1,      stat: 'raids_completed',   reward: { rubies: 75, gems: 1 } },
+  { id: 'world_boss_hunter',   cat: 'Bosses',      name: 'World Boss Hunter',       desc: 'Kill 10 world bosses',                           goal: 10,     stat: 'world_bosses',      reward: { rubies: 200, gems: 4, title: 'World Breaker' } },
 
   // ── Equipment ────────────────────────────────────────────────────────────
   { id: 'first_legendary',     cat: 'Equipment',   name: 'Legendary Find',          desc: 'Collect your first Legendary item',              goal: 1,      stat: 'legendary_items',   reward: { rubies: 50 } },
-  { id: 'first_mythic',        cat: 'Equipment',   name: 'Mythic Relic',            desc: 'Collect your first Mythic item',                 goal: 1,      stat: 'mythic_items',      reward: { rubies: 150, title: 'Relic Hunter' } },
+  { id: 'first_mythic',        cat: 'Equipment',   name: 'Mythic Relic',            desc: 'Collect your first Mythic item',                 goal: 1,      stat: 'mythic_items',      reward: { rubies: 150, gems: 3, title: 'Relic Hunter' } },
   { id: 'gear_hoarder',        cat: 'Equipment',   name: 'Gear Hoarder',            desc: 'Collect 50 equipment pieces',                    goal: 50,     stat: 'total_gear',        reward: { rubies: 60 } },
-  { id: 'loadout_complete',    cat: 'Equipment',   name: 'Battle Ready',            desc: 'Fill all 9 gear slots',                          goal: 1,      stat: 'full_loadout',      reward: { rubies: 40, researchPoints: 5 } },
+  { id: 'loadout_complete',    cat: 'Equipment',   name: 'Battle Ready',            desc: 'Fill all 9 gear slots',                          goal: 1,      stat: 'full_loadout',      reward: { rubies: 40, gems: 1, researchPoints: 5 } },
   { id: 'set_bonuses',         cat: 'Equipment',   name: 'Set Collector',           desc: 'Equip a complete 3-piece gear set',              goal: 1,      stat: 'set_bonus_active',  reward: { rubies: 80 } },
 
   // ── Abilities ────────────────────────────────────────────────────────────
   { id: 'first_ability',       cat: 'Abilities',   name: 'Power Awakened',          desc: 'Collect your first ability',                     goal: 1,      stat: 'total_abilities',   reward: { rubies: 15 } },
   { id: 'ability_vault_10',    cat: 'Abilities',   name: 'Ability Collector',       desc: 'Collect 10 different abilities',                 goal: 10,     stat: 'unique_abilities',  reward: { rubies: 50 } },
   { id: 'legendary_ability',   cat: 'Abilities',   name: 'Legendary Power',         desc: 'Collect a Legendary ability',                    goal: 1,      stat: 'legendary_abilities',reward: { rubies: 100 } },
-  { id: 'full_ability_loadout',cat: 'Abilities',   name: 'Power Overwhelming',      desc: 'Fill all 7 ability slots',                       goal: 1,      stat: 'full_ability_loadout',reward: { rubies: 60, researchPoints: 10 } },
+  { id: 'full_ability_loadout',cat: 'Abilities',   name: 'Power Overwhelming',      desc: 'Fill all 7 ability slots',                       goal: 1,      stat: 'full_ability_loadout',reward: { rubies: 60, gems: 1, researchPoints: 10 } },
 
   // ── Pets ─────────────────────────────────────────────────────────────────
   { id: 'first_pet',           cat: 'Pets',        name: 'Companionship',           desc: 'Collect your first pet',                         goal: 1,      stat: 'total_pets',        reward: { rubies: 30 } },
-  { id: 'pet_collector',       cat: 'Pets',        name: 'Pet Collector',           desc: 'Collect 5 different pets',                       goal: 5,      stat: 'unique_pets',       reward: { rubies: 100, title: 'Beast Tamer' } },
-  { id: 'legendary_pet',       cat: 'Pets',        name: 'Legendary Companion',     desc: 'Collect a Legendary pet',                        goal: 1,      stat: 'legendary_pets',    reward: { rubies: 150 } },
+  { id: 'pet_collector',       cat: 'Pets',        name: 'Pet Collector',           desc: 'Collect 5 different pets',                       goal: 5,      stat: 'unique_pets',       reward: { rubies: 100, gems: 2, title: 'Beast Tamer' } },
+  { id: 'legendary_pet',       cat: 'Pets',        name: 'Legendary Companion',     desc: 'Collect a Legendary pet',                        goal: 1,      stat: 'legendary_pets',    reward: { rubies: 150, gems: 3 } },
 
   // ── Progression ──────────────────────────────────────────────────────────
   { id: 'account_10',          cat: 'Progression', name: 'Rising Star',             desc: 'Reach Account Level 10',                         goal: 10,     stat: 'account_level',     reward: { rubies: 50 } },
-  { id: 'account_25',          cat: 'Progression', name: 'Veteran',                 desc: 'Reach Account Level 25',                         goal: 25,     stat: 'account_level',     reward: { rubies: 150, title: 'Veteran' } },
-  { id: 'account_50',          cat: 'Progression', name: 'Legendary Status',        desc: 'Reach Account Level 50',                         goal: 50,     stat: 'account_level',     reward: { rubies: 500, cosmicShards: 3 } },
-  { id: 'tech_branch_done',    cat: 'Progression', name: 'Research Complete',       desc: 'Fully unlock a tech tree branch',                goal: 1,      stat: 'tech_branch_maxed', reward: { rubies: 200, researchPoints: 25 } },
-  { id: 'prestige_1',          cat: 'Progression', name: 'Reborn',                  desc: 'Complete your first Prestige',                   goal: 1,      stat: 'prestige_count',    reward: { rubies: 500, cosmicShards: 10, title: 'Prestige I' } },
-  { id: 'modes_explorer',      cat: 'Progression', name: 'Mode Explorer',           desc: 'Play every game mode at least once',             goal: 11,     stat: 'modes_played',      reward: { rubies: 250, title: 'Explorer' } },
+  { id: 'account_25',          cat: 'Progression', name: 'Veteran',                 desc: 'Reach Account Level 25',                         goal: 25,     stat: 'account_level',     reward: { rubies: 150, gems: 2, title: 'Veteran' } },
+  { id: 'account_50',          cat: 'Progression', name: 'Legendary Status',        desc: 'Reach Account Level 50',                         goal: 50,     stat: 'account_level',     reward: { rubies: 500, gems: 5, cosmicShards: 3 } },
+  { id: 'tech_branch_done',    cat: 'Progression', name: 'Research Complete',       desc: 'Fully unlock a tech tree branch',                goal: 1,      stat: 'tech_branch_maxed', reward: { rubies: 200, gems: 2, researchPoints: 25 } },
+  { id: 'prestige_1',          cat: 'Progression', name: 'Reborn',                  desc: 'Complete your first Prestige',                   goal: 1,      stat: 'prestige_count',    reward: { rubies: 500, gems: 10, cosmicShards: 10, title: 'Prestige I' } },
+  { id: 'modes_explorer',      cat: 'Progression', name: 'Mode Explorer',           desc: 'Play every game mode at least once',             goal: 11,     stat: 'modes_played',      reward: { rubies: 250, gems: 3, title: 'Explorer' } },
 ];
 
 export const ACHIEVEMENT_MAP = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
@@ -152,9 +183,9 @@ export function checkAchievements(stats, unlockedSet) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MISSION_TEMPLATES = [
-  { id: 'kill_n',          name: 'Exterminator',      desc: 'Kill {n} enemies in a single run',    stat: 'run_kills',     goalGen: () => rng([50,100,150,200]),     reward: { rubies: [10,20,30,40], chest: 1 } },
+  { id: 'kill_n',          name: 'Exterminator',      desc: 'Kill {n} enemies in a single run',    stat: 'run_kills',     goalGen: () => rng([50,100,150,200]),     reward: { rubies: [10,20,30,40], gems: [0,0,0,1], chest: 1 } },
   { id: 'survive_n',       name: 'Endurance',         desc: 'Survive for {n} minutes',             stat: 'run_minutes',   goalGen: () => rng([5,8,10,15]),          reward: { rubies: [15,25,35,50] } },
-  { id: 'kill_bosses',     name: 'Boss Hunt',         desc: 'Kill {n} bosses',                     stat: 'run_bosses',    goalGen: () => rng([1,2,3]),              reward: { rubies: [25,50,75],    chest: 1 } },
+  { id: 'kill_bosses',     name: 'Boss Hunt',         desc: 'Kill {n} bosses',                     stat: 'run_bosses',    goalGen: () => rng([1,2,3]),              reward: { rubies: [25,50,75], gems: [0,0,1], chest: 1 } },
   { id: 'kill_elites',     name: 'Elite Slayer',      desc: 'Kill {n} elite enemies',              stat: 'run_elites',    goalGen: () => rng([5,10,15,20]),         reward: { rubies: [20,30,40,60] } },
   { id: 'earn_gold',       name: 'Gold Rush',         desc: 'Collect {n} gold in a run',           stat: 'run_gold',      goalGen: () => rng([1000,2000,5000]),     reward: { rubies: [15,25,40] } },
   { id: 'play_mode',       name: 'Mode Trial',        desc: 'Complete any run in {mode}',          stat: 'mode_complete', goalGen: () => 1,                         reward: { rubies: [30],          chest: 1 } },
@@ -176,6 +207,7 @@ export function generateDailyMissions(seed = Date.now()) {
     const goal = t.goalGen();
     const rewardTier = Math.min(i, (t.reward.rubies.length ?? 1) - 1);
     const rubies = Array.isArray(t.reward.rubies) ? t.reward.rubies[rewardTier] : t.reward.rubies;
+    const gems = Array.isArray(t.reward.gems) ? (t.reward.gems[rewardTier] ?? 0) : (t.reward.gems ?? 0);
     return {
       id:       `${t.id}_${seed}_${i}`,
       templateId: t.id,
@@ -185,7 +217,7 @@ export function generateDailyMissions(seed = Date.now()) {
       goal,
       progress: 0,
       completed: false,
-      reward:   { rubies, chest: t.reward.chest ?? 0 },
+      reward:   { rubies, gems, chest: t.reward.chest ?? 0 },
     };
   });
 }

@@ -32,8 +32,8 @@ export function resetEquipmentDrop(d) {
 
 // ─── DROP SPAWNING ────────────────────────────────────────────────────────────
 
-export function spawnBossEquipmentDrops(pool, bossPos, bossName, wave, spawnParticlesFn) {
-  const items = generateBossDrops(bossName, wave);
+export function spawnBossEquipmentDrops(pool, bossPos, bossName, wave, spawnParticlesFn, difficultyRating = 3) {
+  const items = generateBossDrops(bossName, wave, difficultyRating);
 
   items.forEach((item, i) => {
     const drop = pool.get();
@@ -61,8 +61,8 @@ export function spawnBossEquipmentDrops(pool, bossPos, bossName, wave, spawnPart
   return items;
 }
 
-export function spawnChestEquipmentDrop(pool, chestPos, wave, spawnParticlesFn) {
-  const item = generateChestDrop(wave);
+export function spawnChestEquipmentDrop(pool, chestPos, wave, spawnParticlesFn, difficultyRating = 3) {
+  const item = generateChestDrop(wave, difficultyRating);
   if (!item) return null;
 
   const drop = pool.get();
